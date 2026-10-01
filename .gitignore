@@ -1,0 +1,44 @@
+# ============ Python / 后端 ============
+backend/venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+*.pytest_cache
+
+# ============ 环境变量（含密钥，禁止提交） ============
+.env
+.env.*
+!.env.example
+backend/.env
+
+# ============ 运行时数据（SQLite + Chroma 向量库） ============
+backend/data/
+*.db
+
+# ============ Node / 前端 ============
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============ 本地临时诊断文件 ============
+_venv_diag*.txt
+pytest_diag.txt
+output_paper.md
+
+# ============ 系统文件 ============
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# ============ IDE / 工具 ============
+.vscode/
+.idea/
+*.code-workspace
+.trae-html-share-packages/
+.workbuddy/
