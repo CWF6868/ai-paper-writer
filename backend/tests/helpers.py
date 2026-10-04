@@ -1,4 +1,4 @@
-# 集成测试公共 helper（不以下划线/ test_ 开头，避免被 pytest 收集）
+# 集成测试公共 helper（不以下划线 / test_ 开头，避免被 pytest 收集）
 async def register_and_login(client, username="tester", password="test123456", email=None):
     """注册 + 登录，返回 access_token"""
     email = email or f"{username}@test.com"

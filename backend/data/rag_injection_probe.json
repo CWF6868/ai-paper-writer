@@ -1,0 +1,32 @@
+{
+  "title": "基于检索增强生成的大语言模型幻觉缓解研究",
+  "refs_count": 5,
+  "refs_titles": [
+    "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+    "Generative Adversarial Networks",
+    "ReAct: Synergizing Reasoning and Acting in Language Models",
+    "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+    "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models"
+  ],
+  "references_text": "[1] Lewis 等. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks[J]. NeurIPS. 2020.\n[2] Goodfellow 等. Generative Adversarial Networks[J]. NeurIPS. 2014.\n[3] Yao 等. ReAct: Synergizing Reasoning and Acting in Language Models[J]. ICLR. 2023.\n[4] Wang 等. Self-Consistency Improves Chain of Thought Reasoning in Language Models[J]. ICLR. 2023.\n[5] Wei 等. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models[J]. NeurIPS. 2022.",
+  "body_word_count": 10730,
+  "body_citation_markers": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "body_has_citations": true,
+  "quality_score": 0.66,
+  "revision_count": 2,
+  "sections": [
+    "摘要",
+    "引言",
+    "相关工作",
+    "方法：基于检索增强生成的幻觉缓解框架",
+    "实验与结果分析",
+    "讨论",
+    "结论"
+  ]
+}

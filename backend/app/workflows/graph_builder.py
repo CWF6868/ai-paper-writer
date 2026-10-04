@@ -18,8 +18,15 @@ class PaperWorkflowGraph:
     论文生成工作流图构建器。
 
     流水线形状：
-      选题分析 →(条件)→ 大纲生成 → 章节撰写 → 添加文献 → 全文润色 → 质量检查
+      选题分析 →(条件)→ 大纲生成 → 检索文献 → 章节撰写 → 文献整理 → 全文润色 → 质量检查
       质量检查 →(条件)→ 结束；不合格则回到“章节撰写”重写（有次数上限）
+
+    2026-10-04 关键修复：
+    RAG 检索结果原先排在大纲之后、写作之后（add_references），写作时拿不到文献，
+    writer_agent 的 references 入参永远是空的（走“暂无参考文献”兜底），
+    RAG 对正文零贡献 —— 这也解释了消融实验里 no_rag 反而 ≥ full。
+    现在把检索前移到写作之前（retrieve_references），写作节点从 state 取文献注入 Prompt；
+    add_references 改为“复用已检索结果”，不再重复检索、也不再重复发 LLM 请求。
 
     与文档原版的区别：
     1. 删掉了 SqliteSaver 导入（没装那个包，原版也没用到，导入即崩）
@@ -50,6 +57,7 @@ class PaperWorkflowGraph:
         # 1) 注册节点：节点名 → 对应的处理函数
         workflow.add_node("analyze_topic", self._analyze_topic)
         workflow.add_node("generate_outline", self._generate_outline)
+        workflow.add_node("retrieve_references", self._retrieve_references)
         workflow.add_node("write_sections", self._write_sections)
         workflow.add_node("add_references", self._add_references)
         workflow.add_node("polish_paper", self._polish_paper)
@@ -69,7 +77,9 @@ class PaperWorkflowGraph:
         )
 
         # 4) 普通边：固定顺序往下走
-        workflow.add_edge("generate_outline", "write_sections")
+        #    关键：检索必须排在写作之前，写作时才有文献可注入
+        workflow.add_edge("generate_outline", "retrieve_references")
+        workflow.add_edge("retrieve_references", "write_sections")
         workflow.add_edge("write_sections", "add_references")
         workflow.add_edge("add_references", "polish_paper")
         workflow.add_edge("polish_paper", "quality_check")
@@ -125,8 +135,23 @@ class PaperWorkflowGraph:
             "outline": result.get("outline_dict") or {},
         }
 
+    async def _retrieve_references(self, state: PaperState) -> dict:
+        """节点3：写作前检索文献（RAG 的知识供给环节）。
+
+        全篇检索一次，各章节共用同一批文献 —— 与既有评测口径（top_k=5、每篇 5 条参考文献）保持一致，
+        便于新旧评测结果直接对比。只做向量检索、不调 LLM，因此几乎不增加耗时。
+        """
+        query = state.get("title") or state.get("topic") or ""
+        references = await self.reference_agent.retrieve(query, top_k=5)
+        return {
+            "current_step": "references",
+            "references": references,
+            # 编号化文本在这里算好：正文引用与文末参考文献共用同一份顺序，编号不会错位
+            "references_text": self.reference_agent.format_gbt(references),
+        }
+
     async def _write_sections(self, state: PaperState) -> dict:
-        """节点3：按大纲逐章撰写"""
+        """节点4：按大纲逐章撰写（把检索到的文献注入写作 Prompt）"""
         outline = state.get("outline") or {}
         sections = outline.get("sections") or []
 
@@ -140,6 +165,12 @@ class PaperWorkflowGraph:
         # 若上一轮质量检查给了改进意见（打回重写），把它喂给写作专家，让重写有的放矢
         feedback = state.get("quality_comment", "")
 
+        # 写作前的检索结果 → 渲染成带编号的引用字符串列表，逐章注入
+        # 列表下标 i 对应正文里的 [i+1]，与文末 references_text 同源同序
+        references = self.reference_agent.format_citation_strings(
+            state.get("references") or []
+        )
+
         for section in sections:
             title = section.get("title", "")
             result = await self.writer_agent.execute({
@@ -147,6 +178,7 @@ class PaperWorkflowGraph:
                 "outline_points": section.get("points", []),
                 "word_count": section.get("word_count", 800),
                 "feedback": feedback,
+                "references": references,          # ← 修复点：原先漏传，写作时永远「暂无参考文献」
             })
             sections_content[title] = result.get("content", "")
 
@@ -156,7 +188,20 @@ class PaperWorkflowGraph:
         }
 
     async def _add_references(self, state: PaperState) -> dict:
-        """节点4：从向量库检索文献并生成引用格式（RAG 在这里派上用场）"""
+        """节点5：整理参考文献（复用检索结果，不再重复检索）。
+
+        前置节点已完成检索，这里只负责把文献渲染成 GB/T 7714 编号列表。
+        若前置检索结果为空（例如单独调用本节点、或向量库为空），
+        退回原来的「检索 + LLM 整理」路径做兼容兜底。
+        """
+        references = state.get("references") or []
+
+        if references:
+            return {
+                "current_step": "references",
+                "formatted_references": self.reference_agent.format_gbt(references),
+            }
+
         result = await self.reference_agent.execute({
             "query": state.get("title", ""),
             "top_k": 5,
@@ -168,7 +213,7 @@ class PaperWorkflowGraph:
         }
 
     async def _polish_paper(self, state: PaperState) -> dict:
-        """节点5：把各章拼成全文并润色"""
+        """节点6：把各章拼成全文并润色"""
         full_content = "\n\n".join([
             f"## {title}\n\n{content}"
             for title, content in (state.get("sections_content") or {}).items()
@@ -185,7 +230,7 @@ class PaperWorkflowGraph:
 
     async def _quality_check(self, state: PaperState) -> dict:
         """
-        节点6：质量检查（LLM 评审版）。
+        节点7：质量检查（LLM 评审版）。
         调用 ReviewerAgent 让大模型从 5 个维度打分并给改进建议；
         解析失败或调用异常时，退回旧的启发式评分（有正文+有文献=0.8），保证流程不崩。
         """

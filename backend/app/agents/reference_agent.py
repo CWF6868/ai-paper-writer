@@ -1,5 +1,5 @@
 # reference_agent.py —— 文献检索 Agent（第 4 个）
-from typing import Dict, Any, AsyncIterator
+from typing import Dict, Any, List, AsyncIterator
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -34,6 +34,36 @@ class ReferenceAgent(BaseAgent):
 [序号] 作者. 题名[J]. 刊名, 出版年, 卷(期): 起止页码.
 
 请确保：引用信息完整准确、格式符合学术规范、文献与研究主题相关。"""
+
+    # ---------- 确定性格式化：不调 LLM，保证「正文引用编号」与「文末参考文献编号」严格一致 ----------
+
+    @staticmethod
+    def format_citation_strings(docs: List[Dict[str, Any]]) -> List[str]:
+        """把检索结果渲染成 GB/T 7714 风格的引用字符串列表（不发 LLM 请求）。
+
+        返回列表的顺序即编号顺序：第 i 项（下标 i-1）对应正文里的 [i]。
+        写作 Prompt 与文末参考文献都从这一个函数取数，编号不会错位。
+        """
+        items: List[str] = []
+        for doc in docs or []:
+            authors = doc.get("authors") or "佚名"
+            title = doc.get("title") or "无题"
+            journal = doc.get("journal") or ""
+            year = doc.get("year")
+            tail = ". ".join([str(x) for x in (journal, year) if x])
+            items.append(f"{authors}. {title}[J]. {tail}." if tail else f"{authors}. {title}[J].")
+        return items
+
+    @classmethod
+    def format_gbt(cls, docs: List[Dict[str, Any]]) -> str:
+        """渲染成带编号的参考文献文本，编号与 format_citation_strings 一一对应"""
+        return "\n".join(
+            f"[{i}] {s}" for i, s in enumerate(cls.format_citation_strings(docs), start=1)
+        )
+
+    async def retrieve(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """只做向量检索、不调 LLM：供「写作前置节点」取原始文献，避免多花一次模型调用"""
+        return await self.retriever.search(query, top_k=top_k)
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         query = input_data.get("query", "")

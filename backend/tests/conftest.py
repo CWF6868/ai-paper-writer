@@ -1,10 +1,16 @@
 # conftest.py —— 测试环境公共配置
-# 必须在 import app 之前覆盖环境变量：pydantic-settings 环境变量优先于 .env，
-# 这样测试跑在独立库上，绝不碰开发库 data/paper_writer.db。
+#
+# 必须在 import app 之前覆盖环境变量：pydantic-settings 的「真实环境变量」优先于 .env，
+# 这样测试跑在独立的库 / 独立的向量库目录上，绝不碰开发库 data/paper_writer.db。
 import os
 
 os.environ["DATABASE_URL"] = "sqlite:///./data/test_paper_writer.db"
 os.environ["VECTOR_DB_PATH"] = "./data/test_chroma"
+# 单测全程不真正联网：把 Key 换成占位值，测试就不再依赖本机 .env 里是否有真 Key
+os.environ["DEEPSEEK_API_KEY"] = "test-deepseek-key"
+os.environ["DASHSCOPE_API_KEY"] = "test-dashscope-key"
+# 保险丝：万一某个用例漏打桩、真的去调模型，让它立刻连接失败而不是打真接口
+os.environ["DEEPSEEK_BASE_URL"] = "http://127.0.0.1:9/v1"
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient

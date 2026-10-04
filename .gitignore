@@ -5,7 +5,9 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
+coverage.xml
 *.pytest_cache
 
 # ============ 环境变量（含密钥，禁止提交） ============
@@ -15,8 +17,15 @@ htmlcov/
 backend/.env
 
 # ============ 运行时数据（SQLite + Chroma 向量库） ============
-backend/data/
+# 整个 data/ 目录忽略（向量库、SQLite、Chroma 中间产物）
+backend/data/*
+# 例外：保留可复核的评测/覆盖率产物（指标证据链，随仓库分发）
+!backend/data/*.json
+
 *.db
+
+# ============ 历史备份（本地保留，不入库） ============
+backend/_backup_*/
 
 # ============ Node / 前端 ============
 frontend/node_modules/

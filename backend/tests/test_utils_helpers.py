@@ -2,6 +2,8 @@
 from app.utils.helpers import parse_json, to_segments
 
 
+# ---------- parse_json ----------
+
 def test_parse_json_ok():
     assert parse_json('{"a": 1}') == {"a": 1}
 
@@ -12,6 +14,11 @@ def test_parse_json_fenced():
     data = parse_json(raw)
     assert data["score"] == 0.82
     assert data["dimensions"] == []
+
+
+def test_parse_json_fenced_without_language_tag():
+    raw = '```\n{"ok": true}\n```'
+    assert parse_json(raw) == {"ok": True}
 
 
 def test_parse_json_invalid_returns_raw():
@@ -32,6 +39,13 @@ def test_parse_json_whitespace_only():
     assert "raw" in data
 
 
+def test_parse_json_array_is_returned_as_is():
+    """顶层是数组时原样返回（不强行包成 dict）"""
+    assert parse_json('[1, 2, 3]') == [1, 2, 3]
+
+
+# ---------- to_segments ----------
+
 def test_to_segments_comma():
     assert to_segments("AI,机器学习") == ["AI", "机器学习"]
 
@@ -43,6 +57,11 @@ def test_to_segments_chinese_comma_and_dun():
 
 def test_to_segments_cleans_whitespace():
     assert to_segments("  AI ,  文本摘要  ") == ["AI", "文本摘要"]
+
+
+def test_to_segments_drops_empty_fragments():
+    """连续分隔符产生的空片段要被丢掉"""
+    assert to_segments("A,,B、、") == ["A", "B"]
 
 
 def test_to_segments_empty():

@@ -1,0 +1,189 @@
+{
+  "summary": {
+    "n": 6,
+    "total_seconds": 714.1,
+    "avg_seconds": 119.0,
+    "min_seconds": 102.4,
+    "max_seconds": 135.4,
+    "median_seconds": 119.8,
+    "avg_word_count": 8984,
+    "avg_references": 5,
+    "total_references": 30,
+    "avg_body_citations": 5,
+    "rewrite_triggered_count": 6,
+    "rewrite_trigger_rate": 1.0,
+    "avg_revision_count": 2,
+    "revision_count_distribution": {
+      "2": 6
+    },
+    "avg_rewrite_rounds": 1,
+    "rewrite_rounds_distribution": {
+      "1": 6
+    },
+    "avg_quality_score": 0.5733
+  },
+  "papers": [
+    {
+      "id": 1,
+      "title": "基于检索增强生成的大语言模型幻觉缓解研究",
+      "status": "ok",
+      "seconds": 114.7,
+      "word_count": 9414,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.58,
+      "sections": 6,
+      "references_count": 5,
+      "reference_titles": [
+        "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "Generative Adversarial Networks",
+        "ReAct: Synergizing Reasoning and Acting in Language Models",
+        "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+        "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 2,
+      "title": "大语言模型思维链推理能力增强方法研究",
+      "status": "ok",
+      "seconds": 102.4,
+      "word_count": 7253,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.64,
+      "sections": 6,
+      "references_count": 5,
+      "reference_titles": [
+        "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+        "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+        "Tree of Thoughts: Deliberate Problem Solving with Large Language Models",
+        "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "ReAct: Synergizing Reasoning and Acting in Language Models"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 3,
+      "title": "面向开放域问答的稠密检索方法研究",
+      "status": "ok",
+      "seconds": 122.0,
+      "word_count": 8823,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.58,
+      "sections": 7,
+      "references_count": 5,
+      "reference_titles": [
+        "Dense Passage Retrieval for Open-Domain Question Answering",
+        "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "Tree of Thoughts: Deliberate Problem Solving with Large Language Models",
+        "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+        "Distributed Representations of Words and Phrases and their Compositionality"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 4,
+      "title": "图神经网络在知识图谱表示学习中的应用研究",
+      "status": "ok",
+      "seconds": 121.2,
+      "word_count": 9699,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.56,
+      "sections": 7,
+      "references_count": 5,
+      "reference_titles": [
+        "Translating Embeddings for Modeling Multi-relational Data",
+        "Semi-Supervised Classification with Graph Convolutional Networks",
+        "Graph Attention Networks",
+        "GloVe: Global Vectors for Word Representation",
+        "Distributed Representations of Words and Phrases and their Compositionality"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 5,
+      "title": "面向中文大模型的参数高效微调方法研究",
+      "status": "ok",
+      "seconds": 135.4,
+      "word_count": 10271,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.64,
+      "sections": 7,
+      "references_count": 5,
+      "reference_titles": [
+        "LoRA: Low-Rank Adaptation of Large Language Models",
+        "LLaMA: Open and Efficient Foundation Language Models",
+        "Training Compute-Optimal Large Language Models",
+        "Training language models to follow instructions with human feedback",
+        "Language Models are Few-Shot Learners"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 6,
+      "title": "扩散模型在文本到图像生成中的应用与优化研究",
+      "status": "ok",
+      "seconds": 118.4,
+      "word_count": 8444,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.44,
+      "sections": 7,
+      "references_count": 5,
+      "reference_titles": [
+        "High-Resolution Image Synthesis with Latent Diffusion Models",
+        "Zero-Shot Text-to-Image Generation",
+        "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer",
+        "Generative Adversarial Networks",
+        "Learning Transferable Visual Models From Natural Language Supervision"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    }
+  ]
+}

@@ -33,7 +33,8 @@ class PaperState(TypedDict, total=False):
     sections_content: dict             # 各章节正文 {章节标题: 内容}
 
     # ---- 文献相关 ----
-    references: List[dict]             # 检索到的文献列表
+    references: List[dict]             # 检索到的文献列表（写作前检索，供写作与文末参考文献共用）
+    references_text: Optional[str]     # 编号化的参考文献文本（与正文 [n] 编号同源同序）
     formatted_references: Optional[str]  # 格式化后的参考文献文本
 
     # ---- 质量控制 ----

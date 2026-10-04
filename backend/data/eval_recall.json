@@ -1,0 +1,591 @@
+{
+  "corpus_size": 42,
+  "k": 5,
+  "queries": 23,
+  "expected_total": 27,
+  "hit_total": 27,
+  "recall_at_k": 1.0,
+  "hit_at_k": 1.0,
+  "rows": [
+    {
+      "query": "Transformer 自注意力机制 序列建模",
+      "expected": [
+        "ref-001"
+      ],
+      "retrieved": [
+        "ref-001",
+        "ref-020",
+        "ref-019",
+        "ref-031",
+        "ref-002"
+      ],
+      "hits": [
+        "ref-001"
+      ],
+      "missed": []
+    },
+    {
+      "query": "BERT 双向编码器 掩码语言模型 预训练",
+      "expected": [
+        "ref-002"
+      ],
+      "retrieved": [
+        "ref-002",
+        "ref-001",
+        "ref-022",
+        "ref-019",
+        "ref-003"
+      ],
+      "hits": [
+        "ref-002"
+      ],
+      "missed": []
+    },
+    {
+      "query": "大语言模型 少样本学习 上下文学习",
+      "expected": [
+        "ref-004"
+      ],
+      "retrieved": [
+        "ref-004",
+        "ref-003",
+        "ref-006",
+        "ref-022",
+        "ref-009"
+      ],
+      "hits": [
+        "ref-004"
+      ],
+      "missed": []
+    },
+    {
+      "query": "人类反馈强化学习 指令微调 对齐",
+      "expected": [
+        "ref-005"
+      ],
+      "retrieved": [
+        "ref-005",
+        "ref-009",
+        "ref-034",
+        "ref-016",
+        "ref-033"
+      ],
+      "hits": [
+        "ref-005"
+      ],
+      "missed": []
+    },
+    {
+      "query": "缩放定律 模型参数量与训练数据量最优配比",
+      "expected": [
+        "ref-007"
+      ],
+      "retrieved": [
+        "ref-007",
+        "ref-006",
+        "ref-016",
+        "ref-040",
+        "ref-004"
+      ],
+      "hits": [
+        "ref-007"
+      ],
+      "missed": []
+    },
+    {
+      "query": "检索增强生成 缓解大模型幻觉",
+      "expected": [
+        "ref-010"
+      ],
+      "retrieved": [
+        "ref-010",
+        "ref-012",
+        "ref-014",
+        "ref-011",
+        "ref-026"
+      ],
+      "hits": [
+        "ref-010"
+      ],
+      "missed": []
+    },
+    {
+      "query": "思维链提示 逐步推理",
+      "expected": [
+        "ref-011"
+      ],
+      "retrieved": [
+        "ref-011",
+        "ref-014",
+        "ref-013",
+        "ref-012",
+        "ref-005"
+      ],
+      "hits": [
+        "ref-011"
+      ],
+      "missed": []
+    },
+    {
+      "query": "推理与行动结合 调用外部工具 智能体",
+      "expected": [
+        "ref-012"
+      ],
+      "retrieved": [
+        "ref-012",
+        "ref-010",
+        "ref-013",
+        "ref-011",
+        "ref-014"
+      ],
+      "hits": [
+        "ref-012"
+      ],
+      "missed": []
+    },
+    {
+      "query": "思维树 树状搜索 回溯 复杂规划",
+      "expected": [
+        "ref-013"
+      ],
+      "retrieved": [
+        "ref-013",
+        "ref-011",
+        "ref-012",
+        "ref-035",
+        "ref-014"
+      ],
+      "hits": [
+        "ref-013"
+      ],
+      "missed": []
+    },
+    {
+      "query": "自洽性 多条推理链采样投票",
+      "expected": [
+        "ref-014"
+      ],
+      "retrieved": [
+        "ref-014",
+        "ref-011",
+        "ref-013",
+        "ref-031",
+        "ref-012"
+      ],
+      "hits": [
+        "ref-014"
+      ],
+      "missed": []
+    },
+    {
+      "query": "稠密段落检索 双编码器 开放域问答",
+      "expected": [
+        "ref-015"
+      ],
+      "retrieved": [
+        "ref-015",
+        "ref-019",
+        "ref-010",
+        "ref-002",
+        "ref-020"
+      ],
+      "hits": [
+        "ref-015"
+      ],
+      "missed": []
+    },
+    {
+      "query": "LoRA 低秩适应 参数高效微调",
+      "expected": [
+        "ref-016"
+      ],
+      "retrieved": [
+        "ref-016",
+        "ref-006",
+        "ref-009",
+        "ref-007",
+        "ref-040"
+      ],
+      "hits": [
+        "ref-016"
+      ],
+      "missed": []
+    },
+    {
+      "query": "FlashAttention 注意力加速 显存优化",
+      "expected": [
+        "ref-017"
+      ],
+      "retrieved": [
+        "ref-017",
+        "ref-001",
+        "ref-020",
+        "ref-038",
+        "ref-040"
+      ],
+      "hits": [
+        "ref-017"
+      ],
+      "missed": []
+    },
+    {
+      "query": "词向量 分布式表示 神经网络 词嵌入",
+      "expected": [
+        "ref-018",
+        "ref-021"
+      ],
+      "retrieved": [
+        "ref-018",
+        "ref-021",
+        "ref-039",
+        "ref-002",
+        "ref-015"
+      ],
+      "hits": [
+        "ref-018",
+        "ref-021"
+      ],
+      "missed": []
+    },
+    {
+      "query": "序列到序列 编码器解码器 机器翻译",
+      "expected": [
+        "ref-019",
+        "ref-020"
+      ],
+      "retrieved": [
+        "ref-019",
+        "ref-020",
+        "ref-001",
+        "ref-031",
+        "ref-022"
+      ],
+      "hits": [
+        "ref-019",
+        "ref-020"
+      ],
+      "missed": []
+    },
+    {
+      "query": "残差网络 跳跃连接 深层网络退化",
+      "expected": [
+        "ref-025"
+      ],
+      "retrieved": [
+        "ref-025",
+        "ref-023",
+        "ref-042",
+        "ref-024",
+        "ref-028"
+      ],
+      "hits": [
+        "ref-025"
+      ],
+      "missed": []
+    },
+    {
+      "query": "生成对抗网络 生成器与判别器 对抗训练",
+      "expected": [
+        "ref-026"
+      ],
+      "retrieved": [
+        "ref-026",
+        "ref-031",
+        "ref-019",
+        "ref-040",
+        "ref-042"
+      ],
+      "hits": [
+        "ref-026"
+      ],
+      "missed": []
+    },
+    {
+      "query": "单阶段 实时目标检测",
+      "expected": [
+        "ref-027"
+      ],
+      "retrieved": [
+        "ref-027",
+        "ref-032",
+        "ref-029",
+        "ref-035",
+        "ref-026"
+      ],
+      "hits": [
+        "ref-027"
+      ],
+      "missed": []
+    },
+    {
+      "query": "图文对比学习 零样本图像分类 多模态",
+      "expected": [
+        "ref-029"
+      ],
+      "retrieved": [
+        "ref-029",
+        "ref-003",
+        "ref-004",
+        "ref-008",
+        "ref-031"
+      ],
+      "hits": [
+        "ref-029"
+      ],
+      "missed": []
+    },
+    {
+      "query": "潜在空间 扩散模型 高分辨率图像生成",
+      "expected": [
+        "ref-030",
+        "ref-031"
+      ],
+      "retrieved": [
+        "ref-030",
+        "ref-031",
+        "ref-026",
+        "ref-015",
+        "ref-039"
+      ],
+      "hits": [
+        "ref-030",
+        "ref-031"
+      ],
+      "missed": []
+    },
+    {
+      "query": "图神经网络 图卷积 节点半监督分类",
+      "expected": [
+        "ref-037",
+        "ref-038"
+      ],
+      "retrieved": [
+        "ref-037",
+        "ref-038",
+        "ref-021",
+        "ref-039",
+        "ref-003"
+      ],
+      "hits": [
+        "ref-037",
+        "ref-038"
+      ],
+      "missed": []
+    },
+    {
+      "query": "自适应学习率 一阶优化算法",
+      "expected": [
+        "ref-040"
+      ],
+      "retrieved": [
+        "ref-040",
+        "ref-016",
+        "ref-017",
+        "ref-036",
+        "ref-035"
+      ],
+      "hits": [
+        "ref-040"
+      ],
+      "missed": []
+    },
+    {
+      "query": "联邦学习 隐私保护 分布式模型聚合",
+      "expected": [
+        "ref-041"
+      ],
+      "retrieved": [
+        "ref-041",
+        "ref-017",
+        "ref-018",
+        "ref-038",
+        "ref-029"
+      ],
+      "hits": [
+        "ref-041"
+      ],
+      "missed": []
+    }
+  ],
+  "metrics": {
+    "recall_at_1": 0.8519,
+    "recall_at_3": 1.0,
+    "recall_at_k": 1.0,
+    "mrr": 0.9259,
+    "rank_distribution": {
+      "1": 23,
+      "2": 4
+    },
+    "unretrieved": []
+  },
+  "attribution": {
+    "mean_hit_overlap": 0.9757,
+    "mean_non_hit_overlap": 0.1398,
+    "mean_margin": 0.8358,
+    "queries_with_full_overlap": 20,
+    "per_query": [
+      {
+        "query": "Transformer 自注意力机制 序列建模",
+        "expected": "ref-001",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.1375,
+        "margin": 0.8625
+      },
+      {
+        "query": "BERT 双向编码器 掩码语言模型 预训练",
+        "expected": "ref-002",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.216,
+        "margin": 0.784
+      },
+      {
+        "query": "大语言模型 少样本学习 上下文学习",
+        "expected": "ref-004",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.2777,
+        "margin": 0.7223
+      },
+      {
+        "query": "人类反馈强化学习 指令微调 对齐",
+        "expected": "ref-005",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.1429,
+        "margin": 0.8571
+      },
+      {
+        "query": "缩放定律 模型参数量与训练数据量最优配比",
+        "expected": "ref-007",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.1822,
+        "margin": 0.8178
+      },
+      {
+        "query": "检索增强生成 缓解大模型幻觉",
+        "expected": "ref-010",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.1839,
+        "margin": 0.8161
+      },
+      {
+        "query": "思维链提示 逐步推理",
+        "expected": "ref-011",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.1057,
+        "margin": 0.8943
+      },
+      {
+        "query": "推理与行动结合 调用外部工具 智能体",
+        "expected": "ref-012",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.1189,
+        "margin": 0.8811
+      },
+      {
+        "query": "思维树 树状搜索 回溯 复杂规划",
+        "expected": "ref-013",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.0407,
+        "margin": 0.9593
+      },
+      {
+        "query": "自洽性 多条推理链采样投票",
+        "expected": "ref-014",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.0772,
+        "margin": 0.9228
+      },
+      {
+        "query": "稠密段落检索 双编码器 开放域问答",
+        "expected": "ref-015",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.0732,
+        "margin": 0.9268
+      },
+      {
+        "query": "LoRA 低秩适应 参数高效微调",
+        "expected": "ref-016",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.0599,
+        "margin": 0.9401
+      },
+      {
+        "query": "FlashAttention 注意力加速 显存优化",
+        "expected": "ref-017",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.0878,
+        "margin": 0.9122
+      },
+      {
+        "query": "词向量 分布式表示 神经网络 词嵌入",
+        "expected": "ref-018",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.2143,
+        "margin": 0.7857
+      },
+      {
+        "query": "序列到序列 编码器解码器 机器翻译",
+        "expected": "ref-019",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.0951,
+        "margin": 0.9049
+      },
+      {
+        "query": "残差网络 跳跃连接 深层网络退化",
+        "expected": "ref-025",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.0894,
+        "margin": 0.9106
+      },
+      {
+        "query": "生成对抗网络 生成器与判别器 对抗训练",
+        "expected": "ref-026",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.1911,
+        "margin": 0.8089
+      },
+      {
+        "query": "单阶段 实时目标检测",
+        "expected": "ref-027",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.0515,
+        "margin": 0.9485
+      },
+      {
+        "query": "图文对比学习 零样本图像分类 多模态",
+        "expected": "ref-029",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.2179,
+        "margin": 0.7821
+      },
+      {
+        "query": "潜在空间 扩散模型 高分辨率图像生成",
+        "expected": "ref-030",
+        "hit_overlap": 0.75,
+        "non_hit_mean_overlap": 0.1692,
+        "margin": 0.5808
+      },
+      {
+        "query": "图神经网络 图卷积 节点半监督分类",
+        "expected": "ref-037",
+        "hit_overlap": 0.8571,
+        "non_hit_mean_overlap": 0.1237,
+        "margin": 0.7334
+      },
+      {
+        "query": "自适应学习率 一阶优化算法",
+        "expected": "ref-040",
+        "hit_overlap": 0.8333,
+        "non_hit_mean_overlap": 0.185,
+        "margin": 0.6484
+      },
+      {
+        "query": "联邦学习 隐私保护 分布式模型聚合",
+        "expected": "ref-041",
+        "hit_overlap": 1.0,
+        "non_hit_mean_overlap": 0.1756,
+        "margin": 0.8244
+      }
+    ],
+    "note": "查询词取自目标文献原文，命中重合率≈97.6% 而语料内非命中仅≈14%，故 Recall@K 偏高属构造性结果，只证明检索链路通畅，不代表泛化能力。"
+  }
+}

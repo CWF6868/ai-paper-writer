@@ -123,8 +123,9 @@ const exportError = ref('')
 const STEP_DEFS = [
   { key: 'analyze_topic', label: '选题分析' },
   { key: 'generate_outline', label: '生成大纲' },
+  { key: 'retrieve_references', label: '检索文献' },
   { key: 'write_sections', label: '撰写章节' },
-  { key: 'add_references', label: '添加文献' },
+  { key: 'add_references', label: '整理文献' },
   { key: 'polish_paper', label: '全文润色' },
   { key: 'quality_check', label: '质量检查' },
 ]

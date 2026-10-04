@@ -1,0 +1,54 @@
+{
+  "coverage": {
+    "num_statements": 1090,
+    "covered_lines": 1079,
+    "missing_lines": 11,
+    "percent": 98.99,
+    "modules_in_report": 41,
+    "modules_on_disk": 41,
+    "modules_missing": []
+  },
+  "recall": {
+    "queries": 23,
+    "k": 5,
+    "expected_total": 27,
+    "hit_total": 27,
+    "recall_at_k": 1.0,
+    "recall_at_1": 0.8519,
+    "recall_at_3": 1.0,
+    "mrr": 0.9259,
+    "rank_distribution": {
+      "1": 23,
+      "2": 4
+    },
+    "corpus_size": 42,
+    "mean_hit_overlap": 0.9757,
+    "mean_non_hit_overlap": 0.1398
+  },
+  "generate": {
+    "n": 6,
+    "avg_seconds": 119.0,
+    "median_seconds": 119.8,
+    "min_seconds": 102.4,
+    "max_seconds": 135.4,
+    "total_seconds": 714.1,
+    "avg_word_count": 8984,
+    "rewrite_triggered": 6,
+    "rewrite_trigger_rate": 1.0,
+    "avg_revision_count": 2,
+    "references_total": 30,
+    "references_traceable": 30,
+    "body_consistent_papers": 6,
+    "avg_quality_score": 0.5733
+  },
+  "tests": {
+    "collected_tests": 216,
+    "collected_files": 17
+  },
+  "summary": {
+    "total_checks": 31,
+    "passed": 31,
+    "failed": 0,
+    "verdict": "ALL_CONSISTENT"
+  }
+}
