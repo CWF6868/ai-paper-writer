@@ -23,6 +23,15 @@ backend/data/*
 !backend/data/*.json
 
 *.db
+# 本地数据库快照/备份（含真实用户与论文数据，禁止提交）
+*.db.bak-*
+*.db.bak
+*.db-journal
+*.db-wal
+
+# 本地排查脚本产物
+probe_*.txt
+probe_*.py
 
 # ============ 历史备份（本地保留，不入库） ============
 backend/_backup_*/

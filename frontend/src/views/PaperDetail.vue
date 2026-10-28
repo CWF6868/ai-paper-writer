@@ -163,7 +163,7 @@ function friendlyError(raw) {
     return 'AI 服务余额不足或额度已用尽，请检查 DeepSeek / DashScope 账户'
   }
   if (s.includes('api key') || s.includes('authentication') || s.includes('unauthorized') || s.includes('invalid_api_key') || s.includes('incorrect api key')) {
-    return 'API Key 无效或缺失，请检查后端 .env 配置'
+    return 'API Key 无效或缺失，请检查后端 .env 配置（改完 .env 必须重启后端才生效）'
   }
   if (s.includes('timeout') || s.includes('timed out')) {
     return '请求 AI 服务超时，请稍后重试'

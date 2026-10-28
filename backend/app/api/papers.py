@@ -122,13 +122,29 @@ async def delete_paper(
 
 async def _save_results(paper: Paper, final_state: dict, db: AsyncSession):
     """把工作流产出存进数据库：全文、大纲、章节、文献"""
-    paper.content = final_state.get("final_paper", "")
+    # 优先保存「历史最优版本」：重写轮次里得分最高的那一版，
+    # 避免把评审抖动导致的、比上一轮更差的退化版本存进库。
+    use_best = bool(final_state.get("best_paper")) and final_state.get("best_score") is not None
+    if use_best:
+        content = final_state.get("best_paper") or ""
+        score = final_state.get("best_score")
+        comment = final_state.get("best_comment")
+        dims = final_state.get("best_dimensions") or []
+        sections = final_state.get("best_sections") or {}
+    else:
+        content = final_state.get("final_paper", "")
+        score = final_state.get("quality_score")
+        comment = final_state.get("quality_comment")
+        dims = final_state.get("quality_dimensions") or []
+        sections = final_state.get("sections_content") or {}
+
+    paper.content = content
     paper.outline = json.dumps(final_state.get("outline") or {}, ensure_ascii=False)
     # 质量评审结果持久化，刷新/重进页面后评审卡片不消失
-    paper.quality_score = final_state.get("quality_score")
-    paper.quality_comment = final_state.get("quality_comment")
-    paper.quality_dimensions = json.dumps(final_state.get("quality_dimensions") or [], ensure_ascii=False)
-    paper.status = PaperStatus.COMPLETED if final_state.get("final_paper") else PaperStatus.DRAFT
+    paper.quality_score = score
+    paper.quality_comment = comment
+    paper.quality_dimensions = json.dumps(dims, ensure_ascii=False)
+    paper.status = PaperStatus.COMPLETED if content else PaperStatus.DRAFT
 
     old_chapters = (await db.execute(
         select(Chapter).where(Chapter.paper_id == paper.id)
@@ -136,8 +152,8 @@ async def _save_results(paper: Paper, final_state: dict, db: AsyncSession):
     for old in old_chapters:
         await db.delete(old)
 
-    for order, (title, content) in enumerate((final_state.get("sections_content") or {}).items()):
-        db.add(Chapter(paper_id=paper.id, title=title, content=content, order_index=order))
+    for order, (title, body) in enumerate(sections.items()):
+        db.add(Chapter(paper_id=paper.id, title=title, content=body, order_index=order))
 
     old_refs = (await db.execute(
         select(Reference).where(Reference.paper_id == paper.id)
@@ -197,7 +213,11 @@ async def generate_paper(
     return {
         "message": "论文生成完成",
         "paper_id": paper_id,
-        "quality_score": final_state.get("quality_score"),
+        "quality_score": (
+            final_state.get("best_score")
+            if final_state.get("best_paper") and final_state.get("best_score") is not None
+            else final_state.get("quality_score")
+        ),
         "sections": len(final_state.get("sections_content", {})),
         "references": len(final_state.get("references", [])),
     }
@@ -235,7 +255,16 @@ async def stream_generate_paper(
                 await _save_results(paper_obj, final_state, session)
                 await session.commit()
 
-            yield f"data: {json.dumps({'done': True, 'quality_score': final_state.get('quality_score'), 'quality_comment': final_state.get('quality_comment'), 'quality_dimensions': final_state.get('quality_dimensions', [])}, ensure_ascii=False)}\n\n"
+            # 结束事件里的分数必须和「实际存进库的版本」一致：
+            # 若保存的是历史最优版本，就回传 best_* 而不是最后一轮的分数
+            _use_best = bool(final_state.get("best_paper")) and final_state.get("best_score") is not None
+            _done = {
+                "done": True,
+                "quality_score": final_state.get("best_score") if _use_best else final_state.get("quality_score"),
+                "quality_comment": (final_state.get("best_comment") if _use_best else final_state.get("quality_comment")),
+                "quality_dimensions": (final_state.get("best_dimensions") if _use_best else final_state.get("quality_dimensions", [])),
+            }
+            yield f"data: {json.dumps(_done, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
 

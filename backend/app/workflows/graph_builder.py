@@ -1,5 +1,6 @@
 
 # graph_builder.py —— LangGraph 工作流图构建器
+import re
 from typing import Optional
 
 from langgraph.graph import StateGraph, START, END
@@ -12,6 +13,35 @@ from app.agents.writer_agent import WriterAgent
 from app.agents.reference_agent import ReferenceAgent
 from app.agents.polish_agent import PolishAgent
 from app.agents.reviewer_agent import ReviewerAgent
+
+def _norm_section_name(name: str) -> str:
+    """把「第3章 实验结果」「三、实验结果」「3. 实验结果」统一成「实验结果」。"""
+    s = str(name or "").strip().lstrip("#").strip()
+    s = re.sub(r"^(第\s*[一二三四五六七八九十百0-9]+\s*[章节部分篇]|[0-9]+\s*[\.、）)]|[一二三四五六七八九十]+\s*[、\.）)])\s*", "", s)
+    return s.strip()
+
+
+def _pick_section_advice(section_title: str, items) -> str:
+    """
+    从评审给出的「分章节建议」里挑出属于当前章节的那一条。
+
+    评审输出的章节名常与大纲标题不一致（多/少「第X章」「一、」「3.」等前缀），
+    因此先归一化再判定「相等 / 互相包含」；匹配不到返回空串，由调用方退回整篇意见。
+    """
+    title = _norm_section_name(section_title)
+    if not title:
+        return ""
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        name = _norm_section_name(item.get("section"))
+        advice = str(item.get("advice") or "").strip()
+        if not name or not advice:
+            continue
+        if name == title or name in title or title in name:
+            return advice
+    return ""
+
 
 class PaperWorkflowGraph:
     """
@@ -162,8 +192,10 @@ class PaperWorkflowGraph:
         # 复制一份再改，不直接篡改共享状态（LangGraph 最佳实践）
         sections_content = dict(state.get("sections_content") or {})
 
-        # 若上一轮质量检查给了改进意见（打回重写），把它喂给写作专家，让重写有的放矢
-        feedback = state.get("quality_comment", "")
+        # 上一轮质量检查给了改进意见（打回重写）：优先用「分章节建议」，
+        # 只有该章节匹配不到专属建议时，才退回整篇意见。
+        global_feedback = state.get("quality_comment", "")
+        section_feedback = state.get("quality_section_feedback") or []
 
         # 写作前的检索结果 → 渲染成带编号的引用字符串列表，逐章注入
         # 列表下标 i 对应正文里的 [i+1]，与文末 references_text 同源同序
@@ -173,11 +205,12 @@ class PaperWorkflowGraph:
 
         for section in sections:
             title = section.get("title", "")
+            advice = _pick_section_advice(title, section_feedback)
             result = await self.writer_agent.execute({
                 "section_title": title,
                 "outline_points": section.get("points", []),
                 "word_count": section.get("word_count", 800),
-                "feedback": feedback,
+                "feedback": advice or global_feedback,
                 "references": references,          # ← 修复点：原先漏传，写作时永远「暂无参考文献」
             })
             sections_content[title] = result.get("content", "")
@@ -242,6 +275,7 @@ class PaperWorkflowGraph:
             has_refs = bool(state.get("references"))
             return 0.8 if (has_content and has_refs) else 0.5, reason, []
 
+        section_feedback = []
         try:
             result = await self.reviewer_agent.execute({
                 "title": state.get("title", ""),
@@ -251,6 +285,9 @@ class PaperWorkflowGraph:
             })
             data = result.get("data") or {}
             raw_score = data.get("score")
+            # 分章节建议：评审逐章给出的改进点，重写时按章节下发，
+            # 避免把整篇意见套给每一章（那会让各章重复回应同一问题、互相打架）
+            section_feedback = data.get("section_feedback") or []
             if raw_score is None:
                 score, comment, dimensions = fallback_score("（评审结果解析失败，使用基础评分）")
             else:
@@ -260,12 +297,35 @@ class PaperWorkflowGraph:
         except Exception as e:
             score, comment, dimensions = fallback_score(f"（评审服务异常，使用基础评分：{e}）")
 
+        # 记录「历史最优版本」：评审分数有抖动，重写后可能反而更低，
+        # 因此每轮都和历史最高分比较，只保留更好的那一版，避免最终保存的是退化版本。
+        current_paper = state.get("final_paper") or ""
+        prev_best = state.get("best_score")
+        if prev_best is None or score > prev_best:
+            best_score = score
+            best_paper = current_paper
+            best_comment = comment
+            best_dimensions = dimensions
+            best_sections = dict(state.get("sections_content") or {})
+        else:
+            best_score = prev_best
+            best_paper = state.get("best_paper") or ""
+            best_comment = state.get("best_comment") or ""
+            best_dimensions = state.get("best_dimensions") or []
+            best_sections = state.get("best_sections") or {}
+
         return {
             "current_step": "quality_check",
             "quality_score": score,
             "quality_comment": comment,
             "quality_dimensions": dimensions,
+            "quality_section_feedback": section_feedback,
             "revision_count": revision_count + 1,
+            "best_score": best_score,
+            "best_paper": best_paper,
+            "best_comment": best_comment,
+            "best_dimensions": best_dimensions,
+            "best_sections": best_sections,
         }
 
     # ---------- 以下是两个条件路由函数（决定走哪条边）----------

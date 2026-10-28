@@ -41,8 +41,18 @@ class PaperState(TypedDict, total=False):
     quality_score: float
     quality_comment: Optional[str]      # 评审意见（LLM 评审专家输出）
     quality_dimensions: List[dict]      # 各维度评分明细
+    quality_section_feedback: List[dict]  # 分章节改进建议 [{section, advice}]，供重写时逐章下发
     revision_count: int
     max_revisions: int
+
+    # ---- 历史最优版本（best-so-far）----
+    # 评审打分本身有抖动，重写后分数可能反而更低。这里记录「截至目前得分最高」
+    # 的那一版正文，保存时优先用它，避免把更好的一版丢掉。
+    best_score: Optional[float]
+    best_paper: Optional[str]
+    best_comment: Optional[str]
+    best_dimensions: List[dict]
+    best_sections: dict
 
     # ---- 输出 ----
     final_paper: Optional[str]
