@@ -11,13 +11,15 @@ import app.models.user, app.models.paper, app.models.chapter, app.models.referen
 from app.api import papers, auth, topics, export
 
 async def _ensure_quality_columns(conn):
-    """轻量迁移：给已存在的 papers 表补质量评审三列（create_all 不改已有表结构）"""
+    """轻量迁移：给已存在的 papers 表补质量评审列（create_all 不改已有表结构）"""
     res = await conn.execute(text("PRAGMA table_info(papers)"))
     existing = {row[1] for row in res.fetchall()}
     additions = {
         "quality_score": "FLOAT",
         "quality_comment": "TEXT",
         "quality_dimensions": "TEXT",
+        # 老库补列必须给 DEFAULT，否则 ADD COLUMN NOT NULL 会因存量行无值而失败
+        "quality_degraded": "BOOLEAN NOT NULL DEFAULT 0",
     }
     for name, typ in additions.items():
         if name not in existing:

@@ -208,3 +208,10 @@ label { display: block; font-size: 13px; color: #6b7280; margin-bottom: 6px; }
 .dim-score { color: #5b4dff; font-weight: 600; }
 .dim-comment { color: #6b7280; }
 .review-comment { margin: 0; padding: 10px 12px; background: #fafafa; border-left: 3px solid #5b4dff; border-radius: 4px; font-size: 14px; color: #4b5563; }
+
+/* 评审降级提示：用醒目的警示块代替「静默隐藏评审区」 */
+.review-block.degraded-block { border-left: 4px solid #f59e0b; background: #fffbeb; }
+.degraded-block h2 { color: #b45309; }
+.degraded-block .degraded-tip { margin: 0 0 6px; font-size: 14px; line-height: 1.75; color: #92400e; }
+.degraded-block .degraded-tip b { color: #b45309; }
+.degraded-block .degraded-hint { margin: 0 0 12px; font-size: 13px; color: #a16207; }

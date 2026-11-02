@@ -118,7 +118,7 @@ pytest                # 需要先安装 requirements-dev.txt
 - **Schema 即接口**（`app/llm/schemas.py`）：5 维评审打分固定枚举、评分锚点写进字段描述、综合分与维度均值自动对账（容差 0.03）、`evidence` 强制可溯源、`severity`/`must_fix` 让重写有靶子。
 - **三级降级**（`app/llm/structured.py`）：function_calling → json_mode → 裸文本解析，每一级记录结构化 JSON 观测日志（`app.llm.observability`，字段与 llm_call_log/agent_tool_log 口径对齐，表结构留到 P0-3 成本归因一起做）；全失败显式抛 `StructuredOutputError`。
 - **工具调用**（`app/llm/tools/`）：只挂 2 个「LLM 自己产不出信息」的工具——`verify_citation`（引用查证：embedding 余弦 + 关键词重合确定性初筛，仅 [0.35, 0.72] 灰区升级 LLM 裁决，约 80% 查证零 LLM 往返）、`search_literature`（当前论文参考文献内的语料语义检索，编号与查证工具同源）。预算硬上限：最多 2 轮工具往返 / 6 次调用（`registry.py`，被 `test_tool_budget` 锁定）。
-- **不编假分数**：评审不可用（异常/三级全失败/越界分）→ `quality_score=None + quality_degraded=True`，放行但不假装合格；历史假 0.8 分数污染评测的路径已删除。
+- **不编假分数**：评审不可用（异常/三级全失败/越界分）→ `quality_score=None + quality_degraded=True`，放行但不假装合格；历史假 0.8 分数污染评测的路径已删除。降级标记一路落库（`papers.quality_degraded`，启动时自动补列迁移）并随详情接口、同步生成响应、SSE `done` 事件下发，前端据此显示「质量评审未完成」而非把评审块静默隐藏——**「没有分数」必须让用户看见，不能让它等同于「没有评审」**。
 - **观测确实可见**（`app/__init__.py` + `app/utils/logging_config.py`）：项目原先没有任何 logging 配置，Python lastResort handler 只输出 WARNING+ 且**不渲染 extra** —— 结果所有 `LLM_CALL`/`TOOL_CALL` 的 INFO 日志被静默丢弃、降级原因一起丢失（2026-11-01 评测实测：6 篇全跑，观测日志 0 条）。现在包导入即配置日志，`LOG_LEVEL` 环境变量可调，降级原因写进 message 而非 extra。
 
 ### 验收标准
@@ -127,6 +127,7 @@ pytest                # 需要先安装 requirements-dev.txt
 |---|---|---|
 | 评审/大纲 Agent 的 `parse_json` 调用 | 2 处（主解析路径） | **0 处**（`grep app/agents -e parse_json` 可验证，仅注释提及） |
 | 静默假分数（评审挂 → 0.8） | 存在 | **0**，降级显式标记 `quality_degraded` |
+| 降级态前端呈现 | 评审块静默消失（`v-if="qualityScore != null"`） | 显示「质量评审未完成」警示块 + 重新生成入口；`quality_degraded` 落库，随详情接口与 SSE `done` 事件下发 |
 | 评审分数越界处理 | 手写 `max(0.0, min(1.0, ...))` | Pydantic `ge/le` 在边界拦截 |
 | 章节名匹配 | 正则模糊匹配为主 | Schema「逐字抄写」约束为主，`_norm_section_name` 降为兜底 |
 | 工具调用预算 | — | **≤ 2 轮 / ≤ 6 次**（单测锁定） |

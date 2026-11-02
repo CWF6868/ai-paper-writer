@@ -120,30 +120,49 @@ async def delete_paper(
 
 # ---------- 工作流结果持久化（和之前完全一样）----------
 
+def _quality_view(final_state: dict) -> dict:
+    """统一「实际存库版本」的评审视图：优先历史最优版本。
+
+    降级判定：只有本轮评审失败、且没有任何可用的历史最优版本时才为 True。
+    存的是 best_* 说明至少有一轮评审成功过，不该标记成「评审不可用」。
+    """
+    use_best = bool(final_state.get("best_paper")) and final_state.get("best_score") is not None
+    if use_best:
+        return {
+            "score": final_state.get("best_score"),
+            "comment": final_state.get("best_comment"),
+            "dimensions": final_state.get("best_dimensions") or [],
+            "degraded": False,
+        }
+    return {
+        "score": final_state.get("quality_score"),
+        "comment": final_state.get("quality_comment"),
+        "dimensions": final_state.get("quality_dimensions") or [],
+        "degraded": bool(final_state.get("quality_degraded")),
+    }
+
+
 async def _save_results(paper: Paper, final_state: dict, db: AsyncSession):
     """把工作流产出存进数据库：全文、大纲、章节、文献"""
     # 优先保存「历史最优版本」：重写轮次里得分最高的那一版，
     # 避免把评审抖动导致的、比上一轮更差的退化版本存进库。
     use_best = bool(final_state.get("best_paper")) and final_state.get("best_score") is not None
+    quality = _quality_view(final_state)
     if use_best:
         content = final_state.get("best_paper") or ""
-        score = final_state.get("best_score")
-        comment = final_state.get("best_comment")
-        dims = final_state.get("best_dimensions") or []
         sections = final_state.get("best_sections") or {}
     else:
         content = final_state.get("final_paper", "")
-        score = final_state.get("quality_score")
-        comment = final_state.get("quality_comment")
-        dims = final_state.get("quality_dimensions") or []
         sections = final_state.get("sections_content") or {}
 
     paper.content = content
     paper.outline = json.dumps(final_state.get("outline") or {}, ensure_ascii=False)
-    # 质量评审结果持久化，刷新/重进页面后评审卡片不消失
-    paper.quality_score = score
-    paper.quality_comment = comment
-    paper.quality_dimensions = json.dumps(dims, ensure_ascii=False)
+    # 质量评审结果持久化，刷新/重进页面后评审卡片不消失；
+    # 降级标记一并落库，否则前端只能看到「没有分数」，无法区分「没评」和「评失败」
+    paper.quality_score = quality["score"]
+    paper.quality_degraded = quality["degraded"]
+    paper.quality_comment = quality["comment"]
+    paper.quality_dimensions = json.dumps(quality["dimensions"], ensure_ascii=False)
     paper.status = PaperStatus.COMPLETED if content else PaperStatus.DRAFT
 
     old_chapters = (await db.execute(
@@ -210,14 +229,13 @@ async def generate_paper(
     await _save_results(paper, final_state, db)
     await db.commit()
 
+    quality = _quality_view(final_state)
     return {
         "message": "论文生成完成",
         "paper_id": paper_id,
-        "quality_score": (
-            final_state.get("best_score")
-            if final_state.get("best_paper") and final_state.get("best_score") is not None
-            else final_state.get("quality_score")
-        ),
+        "quality_score": quality["score"],
+        # 前端要区分「评了但没分」和「评审失败被降级放行」，这里必须显式回传
+        "quality_degraded": quality["degraded"],
         "sections": len(final_state.get("sections_content", {})),
         "references": len(final_state.get("references", [])),
     }
@@ -257,12 +275,13 @@ async def stream_generate_paper(
 
             # 结束事件里的分数必须和「实际存进库的版本」一致：
             # 若保存的是历史最优版本，就回传 best_* 而不是最后一轮的分数
-            _use_best = bool(final_state.get("best_paper")) and final_state.get("best_score") is not None
+            _quality = _quality_view(final_state)
             _done = {
                 "done": True,
-                "quality_score": final_state.get("best_score") if _use_best else final_state.get("quality_score"),
-                "quality_comment": (final_state.get("best_comment") if _use_best else final_state.get("quality_comment")),
-                "quality_dimensions": (final_state.get("best_dimensions") if _use_best else final_state.get("quality_dimensions", [])),
+                "quality_score": _quality["score"],
+                "quality_comment": _quality["comment"],
+                "quality_dimensions": _quality["dimensions"],
+                "quality_degraded": _quality["degraded"],
             }
             yield f"data: {json.dumps(_done, ensure_ascii=False)}\n\n"
         except Exception as e:

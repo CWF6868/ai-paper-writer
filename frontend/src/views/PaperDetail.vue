@@ -62,6 +62,17 @@
         <p v-if="qualityComment" class="review-comment">{{ qualityComment }}</p>
       </section>
 
+      <!-- 评审降级：没有分数不等于「没评过」，必须显式告知，不能静默隐藏 -->
+      <section v-else-if="qualityDegraded && !generating" class="block review-block degraded-block">
+        <h2>质量评审未完成</h2>
+        <p class="degraded-tip">
+          本轮质量评审没有返回可用结果，系统已跳过质量门禁、直接保存正文。
+          <b>这篇论文未经评分，不代表已通过审核。</b>
+        </p>
+        <p class="degraded-hint">建议重新生成一次；若正文内容已可接受，请自行复核论述与文献引用。</p>
+        <button class="btn btn-sm" @click="startGenerate">重新生成</button>
+      </section>
+
       <!-- 大纲 -->
       <section v-if="outline" class="block">
         <h2>论文大纲</h2>
@@ -111,6 +122,7 @@ const loadError = ref('')
 const generating = ref(false)
 const genError = ref('')
 const qualityScore = ref(null)
+const qualityDegraded = ref(false)   // true = 本轮评审失败被降级放行，分数必然为 null
 const qualityComment = ref('')
 const qualityDimensions = ref([])
 const currentStepKey = ref('')
@@ -193,6 +205,7 @@ async function loadPaper(silent) {
     paper.value = res.data
     // 质量评审已持久化，刷新/重进页面也能从详情读回
     qualityScore.value = res.data.quality_score ?? null
+    qualityDegraded.value = !!res.data.quality_degraded
     qualityComment.value = res.data.quality_comment || ''
     qualityDimensions.value = parseDimensions(res.data.quality_dimensions)
   } catch (e) {
@@ -206,9 +219,10 @@ function handleStreamEvent(evt) {
   if (!evt) return
   // 后端出错：{"error": "..."}
   if (evt.error) { genError.value = friendlyError(evt.error); return }
-  // 结束事件：{"done": true, "quality_score": ..., "quality_comment": ..., "quality_dimensions": [...]}
+  // 结束事件：{"done": true, "quality_score": ..., "quality_comment": ..., "quality_dimensions": [...], "quality_degraded": bool}
   if (evt.done) {
     qualityScore.value = evt.quality_score
+    qualityDegraded.value = !!evt.quality_degraded
     qualityComment.value = evt.quality_comment || ''
     qualityDimensions.value = evt.quality_dimensions || []
     return
@@ -221,6 +235,7 @@ function handleStreamEvent(evt) {
     if (update && typeof update === 'object') {
       if ('quality_comment' in update) qualityComment.value = update.quality_comment || ''
       if ('quality_dimensions' in update) qualityDimensions.value = update.quality_dimensions || []
+      if ('quality_degraded' in update) qualityDegraded.value = !!update.quality_degraded
     }
   }
 }
@@ -230,6 +245,7 @@ async function startGenerate() {
   generating.value = true
   genError.value = ''
   qualityScore.value = null
+  qualityDegraded.value = false
   qualityComment.value = ''
   qualityDimensions.value = []
   doneKeys.value = []

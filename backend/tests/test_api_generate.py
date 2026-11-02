@@ -231,3 +231,88 @@ async def test_stream_generate_not_found(client, headers):
 async def test_stream_generate_requires_auth(client):
     async with client.stream("POST", "/api/papers/1/stream-generate") as resp:
         assert resp.status_code == 401
+
+
+# ---------- 评审降级：状态必须传到前端，不能静默隐藏 ----------
+
+DEGRADED_STATE = {
+    "final_paper": "## 引言\n\n降级放行的正文。",
+    "outline": {"sections": []},
+    "sections_content": {"引言": "降级放行的正文。"},
+    "references": [],
+    "quality_score": None,
+    "quality_degraded": True,
+}
+
+
+async def test_generate_marks_degraded_when_review_failed(client, headers, monkeypatch):
+    """评审失败 → 落库 degraded=True 且分数为 None，前端据此显示「评审未完成」"""
+    _patch_run(monkeypatch, DEGRADED_STATE)
+
+    p = await _create(client, headers)
+    body = (await client.post(f"/api/papers/{p['id']}/generate", headers=headers)).json()
+    assert body["quality_score"] is None
+    assert body["quality_degraded"] is True
+
+    d = (await client.get(f"/api/papers/{p['id']}", headers=headers)).json()
+    assert d["quality_degraded"] is True
+    assert d["quality_score"] is None
+    assert d["content"] == DEGRADED_STATE["final_paper"]
+    assert d["status"] == "completed"
+
+
+async def test_generate_normal_review_not_marked_degraded(client, headers, monkeypatch):
+    """正常评审不能被误标降级（否则提示块会常态出现，提示失去意义）"""
+    _patch_run(monkeypatch)
+
+    p = await _create(client, headers)
+    body = (await client.post(f"/api/papers/{p['id']}/generate", headers=headers)).json()
+    assert body["quality_degraded"] is False
+
+    d = (await client.get(f"/api/papers/{p['id']}", headers=headers)).json()
+    assert d["quality_degraded"] is False
+
+
+async def test_generate_keeps_best_score_when_last_round_degraded(client, headers, monkeypatch):
+    """最后一轮评审失败但存在历史最优版本：存 best_*，不算降级"""
+    state = dict(DEGRADED_STATE)
+    state.update({
+        "best_paper": "## 引言\n\n历史最优版本。",
+        "best_score": 0.51,
+        "best_comment": "最优版本意见",
+        "best_dimensions": [{"dimension": "逻辑结构与论证", "score": 0.5, "comment": "尚可"}],
+        "best_sections": {"引言": "历史最优版本。"},
+    })
+    _patch_run(monkeypatch, state)
+
+    p = await _create(client, headers)
+    body = (await client.post(f"/api/papers/{p['id']}/generate", headers=headers)).json()
+    assert body["quality_score"] == 0.51
+    assert body["quality_degraded"] is False
+
+    d = (await client.get(f"/api/papers/{p['id']}", headers=headers)).json()
+    assert d["quality_score"] == 0.51
+    assert d["quality_degraded"] is False
+    assert d["content"] == "## 引言\n\n历史最优版本。"
+
+
+async def test_stream_done_event_carries_degraded_flag(client, headers, monkeypatch):
+    """SSE done 事件必须带 quality_degraded，否则生成结束到刷新之间前端无从提示"""
+    _patch_stream(monkeypatch, [
+        {"quality_check": {
+            "current_step": "quality_check",
+            "quality_score": None,
+            "quality_comment": "",
+            "quality_dimensions": [],
+            "quality_degraded": True,
+        }},
+    ])
+
+    p = await _create(client, headers)
+    async with client.stream("POST", f"/api/papers/{p['id']}/stream-generate", headers=headers) as resp:
+        lines = [ln async for ln in resp.aiter_lines()]
+
+    events = [json.loads(ln[6:]) for ln in lines if ln.startswith("data: ")]
+    done = [e for e in events if e.get("done")][0]
+    assert done["quality_score"] is None
+    assert done["quality_degraded"] is True

@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Column, Integer, Float, String, Text, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, Float, String, Text, DateTime, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
@@ -33,6 +33,9 @@ class Paper(Base):
     quality_score = Column(Float)                                   # 质量评审综合分（0~1）
     quality_comment = Column(Text)                                  # 评审意见
     quality_dimensions = Column(Text)                               # 各维度评分明细（JSON 文本）
+    # True = 本轮评审不可用（降级放行），quality_score 为 None 不是"没评"，而是"评失败"。
+    # 前端据此给出明确提示，避免评审块静默消失。
+    quality_degraded = Column(Boolean, default=False, nullable=False, server_default="0")
 
     author_id = Column(Integer, ForeignKey("users.id"))             # 关联作者
     created_at = Column(DateTime, default=utc_now)                  # 创建时间

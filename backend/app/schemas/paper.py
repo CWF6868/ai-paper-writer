@@ -62,6 +62,8 @@ class PaperDetail(PaperResponse):
     chapters: List[ChapterBrief] = []
     references: List[ReferenceBrief] = []
     quality_score: Optional[float] = None
+    # True = 本轮评审失败被降级放行，前端需显式提示，而不是把评审块静默隐藏
+    quality_degraded: bool = False
     quality_comment: Optional[str] = None
     quality_dimensions: Optional[str] = None   # JSON 文本，前端自行解析
 
