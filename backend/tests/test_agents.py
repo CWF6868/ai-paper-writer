@@ -1,6 +1,7 @@
 # 单元测试：6 个 Agent 的 execute()（全部用假 LLM / 假检索器，不联网、不花 token）
 import pytest
 from langchain_core.language_models.fake import FakeListLLM
+from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
 from app.agents.outline_agent import OutlineAgent
@@ -9,6 +10,7 @@ from app.agents.reference_agent import ReferenceAgent
 from app.agents.reviewer_agent import ReviewerAgent
 from app.agents.topic_agent import TopicAgent
 from app.agents.writer_agent import WriterAgent
+from app.llm.structured import StructuredOutputError
 
 
 def _with_llm(agent, *responses):
@@ -60,13 +62,14 @@ async def test_outline_agent_parses_json_into_dict():
     assert out["outline_dict"]["sections"][0]["title"] == "引言"
 
 
-async def test_outline_agent_invalid_json_yields_empty_dict_but_keeps_raw():
+async def test_outline_agent_invalid_json_raises_structured_error():
+    """非法输出 → 三级降级全失败 → 显式抛 StructuredOutputError（不再静默 {"raw": ...}）。
+
+    graph_builder 捕获后返回空 outline，由 _write_sections 的「整篇当一节写」兜底。
+    """
     a = _with_llm(OutlineAgent(), "抱歉我无法输出 JSON")
-    out = await a.execute({"title": "T", "paper_type": "research", "word_limit": 6000})
-    # 解析失败 → outline_dict 退化成 {"raw": 原文}，不会崩；但绝不能凭空造出 sections
-    assert out["outline_dict"]["raw"] == "抱歉我无法输出 JSON"
-    assert "sections" not in out["outline_dict"]
-    assert out["outline"] == "抱歉我无法输出 JSON"
+    with pytest.raises(StructuredOutputError):
+        await a.execute({"title": "T", "paper_type": "research", "word_limit": 6000})
 
 
 # ================= 写作 Agent =================
@@ -248,6 +251,23 @@ VALID_REVIEW = """```json
 ```"""
 
 
+async def test_reviewer_handles_invalid_json():
+    """非法 JSON → 三级降级全失败 → 显式抛 StructuredOutputError。
+
+    旧版静默返回 {"raw": ...}，下游拿到兜底 0.8 假分数进评测集——这是数据污染，
+    P0-1 改造后必须显式失败。
+    """
+    a = _with_llm(ReviewerAgent(), "这不是 JSON 输出")
+    with pytest.raises(StructuredOutputError):
+        await a.execute({"title": "T", "topic": "NLP", "content": "C", "references": "R"})
+
+
+async def test_reviewer_handles_empty_response():
+    a = _with_llm(ReviewerAgent(), "")
+    with pytest.raises(StructuredOutputError):
+        await a.execute({"title": "T", "topic": "NLP", "content": "C", "references": "R"})
+
+
 async def test_reviewer_parses_valid_json():
     a = _with_llm(ReviewerAgent(), VALID_REVIEW)
     result = await a.execute({"title": "T", "topic": "NLP", "content": "正文", "references": "文献"})
@@ -256,25 +276,34 @@ async def test_reviewer_parses_valid_json():
     assert len(data["dimensions"]) == 5
     assert data["dimensions"][0]["dimension"] == "创新性与学术价值"
     assert "对比实验" in data["overall"]
+    # FakeListLLM 上 function_calling/json_mode 不可用 → 走 raw_parse → 显式降级标记
+    assert result["degraded"] is True
 
 
-async def test_reviewer_handles_invalid_json():
-    """非法 JSON 不崩溃，data 里带原始文本"""
-    a = _with_llm(ReviewerAgent(), "这不是 JSON 输出")
-    result = await a.execute({"title": "T", "topic": "NLP", "content": "C", "references": "R"})
-    assert result["data"]["raw"] == "这不是 JSON 输出"
+class _RecordingLLM:
+    """记录收到的 messages，返回固定文本（模拟不支持 tools/structured 的模型）。"""
 
+    def __init__(self, reply="不是 JSON"):
+        self.calls = []
+        self._reply = reply
 
-async def test_reviewer_handles_empty_response():
-    a = _with_llm(ReviewerAgent(), "")
-    result = await a.execute({"title": "T", "topic": "NLP", "content": "C", "references": "R"})
-    assert result["data"] == {}
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    async def ainvoke(self, messages, **kwargs):
+        self.calls.append(messages)
+        return AIMessage(content=self._reply)
 
 
 async def test_reviewer_prompt_contains_paper_fields():
-    store = {}
-    a = ReviewerAgent()
-    a.llm = _capture(store)
-    await a.execute({"title": "题目X", "topic": "方向Y", "content": "内容Z", "references": "文献W"})
+    rec = _RecordingLLM()
+    a = ReviewerAgent(llm=rec)
+    with pytest.raises(StructuredOutputError):
+        await a.execute({"title": "题目X", "topic": "方向Y", "content": "内容Z", "references": "文献W"})
+    assert rec.calls, "评审 Agent 必须把论文字段渲染进 prompt"
+    first_prompt = "".join(
+        m.content if isinstance(m.content, str) else str(m.content)
+        for m in rec.calls[0]
+    )
     for token in ("题目X", "方向Y", "内容Z", "文献W"):
-        assert token in store["text"]
+        assert token in first_prompt

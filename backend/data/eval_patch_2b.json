@@ -1,0 +1,32 @@
+{
+  "papers": [
+    {
+      "id": 2,
+      "title": "大语言模型思维链推理能力增强方法研究",
+      "status": "ok",
+      "seconds": 204.7,
+      "word_count": 8994,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.51,
+      "first_pass_score": 0.49,
+      "sections": 8,
+      "references_count": 5,
+      "reference_titles": [
+        "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+        "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+        "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "Tree of Thoughts: Deliberate Problem Solving with Large Language Models",
+        "ReAct: Synergizing Reasoning and Acting in Language Models"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    }
+  ]
+}

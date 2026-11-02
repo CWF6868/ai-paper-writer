@@ -1,0 +1,172 @@
+{
+  "papers": [
+    {
+      "id": 1,
+      "title": "基于检索增强生成的大语言模型幻觉缓解研究",
+      "status": "ok",
+      "seconds": 205.3,
+      "word_count": 9619,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.51,
+      "first_pass_score": 0.44,
+      "sections": 8,
+      "references_count": 5,
+      "reference_titles": [
+        "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "LLaMA: Open and Efficient Foundation Language Models",
+        "Zero-Shot Text-to-Image Generation",
+        "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+        "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 2,
+      "title": "大语言模型思维链推理能力增强方法研究",
+      "status": "ok",
+      "seconds": 204.7,
+      "word_count": 8994,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.51,
+      "first_pass_score": 0.49,
+      "sections": 8,
+      "references_count": 5,
+      "reference_titles": [
+        "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+        "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+        "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "Tree of Thoughts: Deliberate Problem Solving with Large Language Models",
+        "ReAct: Synergizing Reasoning and Acting in Language Models"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 3,
+      "title": "面向开放域问答的稠密检索方法研究",
+      "status": "ok",
+      "seconds": 218.7,
+      "word_count": 11758,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.44,
+      "first_pass_score": 0.44,
+      "sections": 8,
+      "references_count": 5,
+      "reference_titles": [
+        "Dense Passage Retrieval for Open-Domain Question Answering",
+        "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+        "Tree of Thoughts: Deliberate Problem Solving with Large Language Models",
+        "Distributed Representations of Words and Phrases and their Compositionality"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 4,
+      "title": "图神经网络在知识图谱表示学习中的应用研究",
+      "status": "ok",
+      "seconds": 204.9,
+      "word_count": 10761,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.44,
+      "first_pass_score": 0.44,
+      "sections": 7,
+      "references_count": 5,
+      "reference_titles": [
+        "Translating Embeddings for Modeling Multi-relational Data",
+        "Semi-Supervised Classification with Graph Convolutional Networks",
+        "Distributed Representations of Words and Phrases and their Compositionality",
+        "Graph Attention Networks",
+        "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 5,
+      "title": "面向中文大模型的参数高效微调方法研究",
+      "status": "ok",
+      "seconds": 205.0,
+      "word_count": 9749,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.44,
+      "first_pass_score": 0.42,
+      "sections": 7,
+      "references_count": 5,
+      "reference_titles": [
+        "LoRA: Low-Rank Adaptation of Large Language Models",
+        "LLaMA: Open and Efficient Foundation Language Models",
+        "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+        "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+        "Training language models to follow instructions with human feedback"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    },
+    {
+      "id": 6,
+      "title": "扩散模型在文本到图像生成中的应用与优化研究",
+      "status": "ok",
+      "seconds": 204.7,
+      "word_count": 10484,
+      "revision_count": 2,
+      "rewrite_triggered": true,
+      "quality_score": 0.42,
+      "first_pass_score": 0.42,
+      "sections": 8,
+      "references_count": 5,
+      "reference_titles": [
+        "High-Resolution Image Synthesis with Latent Diffusion Models",
+        "Zero-Shot Text-to-Image Generation",
+        "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer",
+        "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+        "Language Models are Unsupervised Multitask Learners"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    }
+  ]
+}

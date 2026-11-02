@@ -4,7 +4,8 @@
 
     1. 平均生成时长（秒/篇，wall-clock）
     2. RAG 引用命中数（每篇参考文献条数 + 正文 [n] 引用标注数）
-    3. 重写触发率（revision_count > 1 的论文占比；工作流里 quality_check 打分 < 0.7 会打回重写）
+    3. 重写触发率（revision_count > 1 的论文占比；工作流里 quality_check 打分低于
+       settings.QUALITY_PASS_THRESHOLD（默认 0.44）会打回重写）
 
 指标口径（对外报数请按此说明）：
     - revision_count = 质量检查节点的执行次数；首次检查不算重写，
@@ -91,6 +92,8 @@ async def _run_once(graph: PaperWorkflowGraph, item: Dict) -> Dict:
         "revision_count": final.get("revision_count", 0),
         "rewrite_triggered": final.get("revision_count", 0) > 1,
         "quality_score": final.get("quality_score"),
+        # 首次检查分（重写前）：阈值该定在哪的依据
+        "first_pass_score": final.get("first_pass_score"),
         "sections": len(final.get("sections_content") or {}),
         "references_count": len(refs),
         "reference_titles": [r.get("title") for r in refs],
@@ -131,6 +134,10 @@ def _summarize(rows: List[Dict]) -> Dict:
         },
         "avg_quality_score": round(statistics.mean(
             [r["quality_score"] for r in ok if r["quality_score"] is not None] or [0]), 4),
+        # 首检分（重写前）：质量阈值标定的唯一依据，缺失时阈值只能猜
+        "first_pass_scores": [r.get("first_pass_score") for r in ok],
+        "avg_first_pass_score": round(statistics.mean(
+            [r["first_pass_score"] for r in ok if r.get("first_pass_score") is not None] or [0]), 4),
     }
 
 
@@ -178,7 +185,8 @@ async def _main() -> int:
               f"（平均重写轮次 {summary['avg_rewrite_rounds']}，质检平均执行 "
               f"{summary['avg_revision_count']} 次）")
         print(f"  重写轮次分布      : {summary['rewrite_rounds_distribution']}")
-        print(f"  平均质量分        : {summary['avg_quality_score']}")
+        print(f"  平均质量分        : {summary['avg_quality_score']}"
+              f"（首检均分 {summary['avg_first_pass_score']}，逐篇 {summary['first_pass_scores']}）")
     else:
         print("  没有任何一篇成功，请检查 API Key / 网络")
 

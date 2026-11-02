@@ -6,6 +6,8 @@
 #   3) 用假 Agent 跑整张图（不联网、不花 token），锁死 RAG 注入链路
 from app.workflows.graph_builder import PaperWorkflowGraph
 
+from app.config import settings
+
 FAKE_OUTLINE = {"sections": [
     {"title": "引言", "points": ["背景介绍"], "word_count": 200},
     {"title": "方法", "points": ["技术方案"], "word_count": 300},
@@ -49,16 +51,41 @@ def _patch_agents(g, *, outline=None, retrieve=None, writer=None,
 # ==================== 1) 条件路由 ====================
 
 def test_check_quality_pass_on_high_score():
+    """通过线 = settings.QUALITY_PASS_THRESHOLD（默认 0.55，按实测尺度标定）。
+
+    旧阈值 0.7 在改造后的评分尺度下永远不可达（实测 6 篇全落 0.44-0.53），
+    导致重写 100% 触发、门禁失效。此处锁定边界，防止阈值被误改回不可达区间。
+    """
     g = _graph()
-    assert g._check_quality({"quality_score": 0.7}) == "pass"
     assert g._check_quality({"quality_score": 0.95}) == "pass"
+    # 恰好等于阈值 → 通过（>= 而非 >）
+    assert g._check_quality({"quality_score": settings.QUALITY_PASS_THRESHOLD}) == "pass"
+    # 略低于阈值 → 打回
+    assert g._check_quality({
+        "quality_score": settings.QUALITY_PASS_THRESHOLD - 0.01, "revision_count": 0,
+    }) == "revise"
+
+
+def test_quality_threshold_calibrated_to_measured_scale():
+    """阈值必须落在实测首检分区间内，否则门禁退化（两侧都会失效）。
+
+    实测（2026-11-02，6 篇，首检分 0.42-0.49、中位数 0.44）：
+      阈值 > 0.49 → 所有论文首检都不过，重写必然 100%，门禁退化为固定流程；
+      阈值 <= 0.42 → 所有论文直接放行，门禁等于不存在。
+    当前取 0.44（中位数），对应重写率 33%。
+    """
+    from app.config import settings as s
+    assert s.QUALITY_PASS_THRESHOLD <= 0.49, "阈值高于实测最高首检分，重写必然 100% 触发"
+    assert s.QUALITY_PASS_THRESHOLD > 0.42, "阈值不高于实测最低首检分，所有论文都会自动通过"
 
 
 def test_check_quality_revise_then_exhausted():
+    # 用「阈值下方」的分数，不写死具体数值：阈值会随实测标定调整
+    low = round(settings.QUALITY_PASS_THRESHOLD - 0.01, 2)
     g = _graph()
-    assert g._check_quality({"quality_score": 0.5, "revision_count": 0, "max_revisions": 2}) == "revise"
+    assert g._check_quality({"quality_score": low, "revision_count": 0, "max_revisions": 2}) == "revise"
     # 次数用尽 → 放行结束（防死循环）
-    assert g._check_quality({"quality_score": 0.5, "revision_count": 2, "max_revisions": 2}) == "pass"
+    assert g._check_quality({"quality_score": low, "revision_count": 2, "max_revisions": 2}) == "pass"
 
 
 def test_check_quality_missing_score_defaults_to_zero():
@@ -99,8 +126,8 @@ async def test_analyze_topic_calls_topic_agent_when_topic_empty():
     assert seen["keywords"] == "RAG, 幻觉"
 
 
-async def test_quality_check_fallback_on_error():
-    """评审 Agent 抛异常 → 退回启发式评分，流程不崩"""
+async def test_quality_check_degrades_on_error():
+    """评审 Agent 抛异常 → 显式降级：quality_score=None + degraded=True，绝不编 0.8 假分数"""
     g = _graph()
 
     async def boom(*args, **kwargs):
@@ -110,15 +137,16 @@ async def test_quality_check_fallback_on_error():
     out = await g._quality_check({
         "final_paper": "正文存在", "references": [{"title": "R"}], "revision_count": 0,
     })
-    assert out["quality_score"] == 0.8
-    assert "基础评分" in out["quality_comment"]
+    assert out["quality_score"] is None
+    assert out["quality_degraded"] is True
+    assert "评审不可用" in out["quality_comment"]
     assert "LLM 服务不可用" in out["quality_comment"]
     assert out["quality_dimensions"] == []
     assert out["revision_count"] == 1
 
 
-async def test_quality_check_fallback_when_parse_fails():
-    """评审返回非法 JSON（data 无 score）→ 同样兜底；无正文无文献 = 0.5"""
+async def test_quality_check_degrades_when_score_missing():
+    """评审结果缺 score（schema 之外的脏路径）→ 同样显式降级，不再退回启发式 0.5/0.8"""
     g = _graph()
 
     async def fake_review(*args, **kwargs):
@@ -126,17 +154,81 @@ async def test_quality_check_fallback_when_parse_fails():
 
     _patch_agents(g, review=fake_review)
     out = await g._quality_check({"final_paper": "", "references": [], "revision_count": 0})
-    assert out["quality_score"] == 0.5
+    assert out["quality_score"] is None
+    assert out["quality_degraded"] is True
 
 
-async def test_quality_check_clamps_out_of_range_score():
+async def test_quality_check_degrades_on_out_of_range_score():
+    """越界分数（1.7）→ 降级而非手写 clamp（类型系统本该拦住，Pydantic 已拦，这里兜底）"""
     g = _graph()
 
     async def fake_review(*args, **kwargs):
         return {"raw": "{}", "data": {"score": 1.7, "overall": "好", "dimensions": []}}
 
     _patch_agents(g, review=fake_review)
-    assert (await g._quality_check({"revision_count": 0}))["quality_score"] == 1.0
+    out = await g._quality_check({"revision_count": 0})
+    assert out["quality_score"] is None
+    assert out["quality_degraded"] is True
+    assert "越界" in out["quality_comment"]
+
+
+def test_check_quality_degraded_passes():
+    """评审降级 → 放行但不假装合格（路由必须先于分数判断）"""
+    g = _graph()
+    assert g._check_quality({"quality_degraded": True}) == "pass"
+    # 降级标记缺席时保持旧行为：缺分 → 打回
+    assert g._check_quality({}) == "revise"
+
+
+async def test_first_pass_score_recorded_once():
+    """首检分只在第一次质量检查时写入，后续重写轮次不得覆盖。
+
+    用途：质量阈值标定。没有这条数据，阈值只能靠猜（2026-11-01 实测即卡在此）。
+    """
+    g = _graph()
+
+    async def review_045(*args, **kwargs):
+        return {"raw": "{}", "data": {"score": 0.45, "overall": "一般", "dimensions": []}}
+
+    _patch_agents(g, review=review_045)
+    first = await g._quality_check({"revision_count": 0})
+    assert first["first_pass_score"] == 0.45
+
+    async def review_062(*args, **kwargs):
+        return {"raw": "{}", "data": {"score": 0.62, "overall": "改进", "dimensions": []}}
+
+    _patch_agents(g, review=review_062)
+    # 第二轮（重写后）：分数涨到 0.62，但首检分必须仍是 0.45
+    second = await g._quality_check({
+        "revision_count": 1, "first_pass_score": first["first_pass_score"],
+    })
+    assert second["quality_score"] == 0.62
+    assert second["first_pass_score"] == 0.45
+
+
+async def test_quality_check_filters_minor_and_injects_must_fix():
+    """severity=minor 的建议不进重写；must_fix 拼进评审意见驱动下一轮重写（设计 2.3 要点 3）"""
+    g = _graph()
+
+    async def fake_review(*args, **kwargs):
+        return {"raw": "{}", "data": {
+            "score": 0.6, "overall": "需改进", "dimensions": [],
+            "must_fix": ["补充对比实验", "修正摘要与正文不一致"],
+            "section_feedback": [
+                {"section": "方法", "advice": "补实验", "severity": "blocking"},
+                {"section": "引言", "advice": "措辞微调", "severity": "minor"},
+                {"section": "结论", "advice": "重写结论", "severity": "major"},
+            ],
+        }}
+
+    _patch_agents(g, review=fake_review)
+    out = await g._quality_check({"revision_count": 0})
+    assert "必须修复" in out["quality_comment"]
+    assert "补充对比实验" in out["quality_comment"]
+    assert "修正摘要与正文不一致" in out["quality_comment"]
+    # minor 被过滤，blocking/major 保留
+    advices = [f["advice"] for f in out["quality_section_feedback"]]
+    assert advices == ["补实验", "重写结论"]
 
 
 async def test_quality_check_increments_revision_count():
@@ -278,7 +370,9 @@ async def test_full_workflow_revises_on_low_score():
     async def fake_review(*a, **kw):
         calls["review"] += 1
         if calls["review"] == 1:
-            return {"raw": "{}", "data": {"score": 0.5, "overall": "论证不足，需改进", "dimensions": []}}
+            # 低于阈值 → 触发重写（跟随标定值，不写死 0.5）
+            low = round(settings.QUALITY_PASS_THRESHOLD - 0.02, 2)
+            return {"raw": "{}", "data": {"score": low, "overall": "论证不足，需改进", "dimensions": []}}
         return {"raw": "{}", "data": {"score": 0.9, "overall": "达标", "dimensions": []}}
 
     _patch_agents(g, topic=lambda *a, **kw: {"topics": ""}, outline=fake_outline,
