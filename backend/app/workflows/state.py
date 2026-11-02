@@ -17,6 +17,7 @@ class PaperState(TypedDict, total=False):
 
     # ---- 基本信息 ----
     paper_id: Optional[int]
+    user_id: Optional[int]            # 论文作者：成本流水按用户归因用（不靠 papers 反查）
     title: str
     topic: str
     keywords: List[str]

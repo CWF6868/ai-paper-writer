@@ -19,6 +19,7 @@ from app.agents.polish_agent import PolishAgent
 from app.agents.reviewer_agent import ReviewerAgent
 from app.llm.structured import StructuredOutputError
 from app.llm.tools.context import set_current_references
+from app.core.llm_client import llm_scope
 
 logger = logging.getLogger(__name__)
 
@@ -88,18 +89,37 @@ class PaperWorkflowGraph:
         # 构建并编译工作流图
         self.graph = self._build_graph()
 
+    @staticmethod
+    def _metered(node_name: str, fn):
+        """给节点包一层 LLM 计量作用域：该节点内所有模型调用都归到 node_name 下。
+
+        用包装器而不是在每个业务方法里写 with：不动缩进、不污染业务逻辑，
+        新增节点时也不会忘记标记（漏标 = 成本表里出现 unknown 节点）。
+        """
+        async def _wrapped(state: PaperState) -> dict:
+            with llm_scope(
+                node=node_name,
+                paper_id=state.get("paper_id"),
+                user_id=state.get("user_id"),
+            ):
+                return await fn(state)
+
+        return _wrapped
+
     def _build_graph(self):
         """构建工作流图"""
         workflow = StateGraph(PaperState)
 
         # 1) 注册节点：节点名 → 对应的处理函数
-        workflow.add_node("analyze_topic", self._analyze_topic)
-        workflow.add_node("generate_outline", self._generate_outline)
-        workflow.add_node("retrieve_references", self._retrieve_references)
-        workflow.add_node("write_sections", self._write_sections)
-        workflow.add_node("add_references", self._add_references)
-        workflow.add_node("polish_paper", self._polish_paper)
-        workflow.add_node("quality_check", self._quality_check)
+        # 用 _metered 包一层：给每个节点内的所有模型调用打上 node/paper_id 标签，
+        # 成本才能按节点归因。不改业务方法体，避免把缩进和逻辑一起搅乱。
+        workflow.add_node("analyze_topic", self._metered("analyze_topic", self._analyze_topic))
+        workflow.add_node("generate_outline", self._metered("generate_outline", self._generate_outline))
+        workflow.add_node("retrieve_references", self._metered("retrieve_references", self._retrieve_references))
+        workflow.add_node("write_sections", self._metered("write_sections", self._write_sections))
+        workflow.add_node("add_references", self._metered("add_references", self._add_references))
+        workflow.add_node("polish_paper", self._metered("polish_paper", self._polish_paper))
+        workflow.add_node("quality_check", self._metered("quality_check", self._quality_check))
 
         # 2) 入口：从选题分析开始
         workflow.add_edge(START, "analyze_topic")

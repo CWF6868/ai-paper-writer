@@ -197,6 +197,8 @@ def _build_initial_state(paper: Paper) -> dict:
     """把数据库里的论文记录组装成工作流初始状态"""
     return {
         "paper_id": paper.id,
+        # 成本流水按作者归因：靠这一行，论文删除后历史成本仍能算到人头上
+        "user_id": paper.author_id,
         "title": paper.title,
         "topic": paper.topic or "",
         "keywords": [k.strip() for k in paper.keywords.split(",")] if paper.keywords else [],

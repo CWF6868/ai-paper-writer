@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.agents.topic_agent import TopicAgent
 from app.core.deps import get_current_user
+from app.core.llm_client import llm_scope
 from app.models.user import User
 from app.schemas.topic import TopicRecommendRequest, TopicRecommendResponse
 from app.utils.llm import check_llm_config
@@ -25,9 +26,12 @@ async def recommend_topic(
     if not field:
         raise HTTPException(status_code=400, detail="研究方向不能为空")
 
-    result = await topic_agent.execute({
-        "field": field,
-        "keywords": data.keywords or "",
-        "requirements": data.requirements or "",
-    })
+    # 选题推荐不属于任何论文，但有明确的发起人：user_id 照打，
+    # 否则这类花费在「按用户看成本」时凭空消失（它照样计费）。
+    with llm_scope(node="topic", user_id=current_user.id):
+        result = await topic_agent.execute({
+            "field": field,
+            "keywords": data.keywords or "",
+            "requirements": data.requirements or "",
+        })
     return TopicRecommendResponse(topics=result.get("topics", ""))
