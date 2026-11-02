@@ -1,0 +1,112 @@
+{
+  "runs": {
+    "before": {
+      "tag": "before",
+      "params": {
+        "papers": 6,
+        "sections": 8,
+        "writer_latency": 1.0,
+        "levels": [
+          1,
+          2,
+          4
+        ],
+        "node_latency": {
+          "outline": 0.8,
+          "retrieve": 0.1,
+          "polish": 1.0,
+          "review": 1.2
+        }
+      },
+      "results": [
+        {
+          "paper_concurrency": 1,
+          "papers": 6,
+          "elapsed_seconds": 67.28,
+          "avg_paper_seconds": 11.21,
+          "p50_paper_seconds": 11.22,
+          "throughput_per_min": 5.351,
+          "writer_peak_in_flight": 1,
+          "writer_calls": 48,
+          "speedup_vs_first": 1.0
+        },
+        {
+          "paper_concurrency": 2,
+          "papers": 6,
+          "elapsed_seconds": 33.64,
+          "avg_paper_seconds": 11.21,
+          "p50_paper_seconds": 11.21,
+          "throughput_per_min": 10.702,
+          "writer_peak_in_flight": 2,
+          "writer_calls": 48,
+          "speedup_vs_first": 2.0
+        },
+        {
+          "paper_concurrency": 4,
+          "papers": 6,
+          "elapsed_seconds": 22.43,
+          "avg_paper_seconds": 11.22,
+          "p50_paper_seconds": 11.23,
+          "throughput_per_min": 16.048,
+          "writer_peak_in_flight": 4,
+          "writer_calls": 48,
+          "speedup_vs_first": 3.0
+        }
+      ]
+    },
+    "after": {
+      "tag": "after",
+      "params": {
+        "papers": 6,
+        "sections": 8,
+        "writer_latency": 1.0,
+        "levels": [
+          1,
+          2,
+          4
+        ],
+        "node_latency": {
+          "outline": 0.8,
+          "retrieve": 0.1,
+          "polish": 1.0,
+          "review": 1.2
+        }
+      },
+      "results": [
+        {
+          "paper_concurrency": 1,
+          "papers": 6,
+          "elapsed_seconds": 30.86,
+          "avg_paper_seconds": 5.14,
+          "p50_paper_seconds": 5.14,
+          "throughput_per_min": 11.664,
+          "writer_peak_in_flight": 4,
+          "writer_calls": 48,
+          "speedup_vs_first": 1.0
+        },
+        {
+          "paper_concurrency": 2,
+          "papers": 6,
+          "elapsed_seconds": 15.46,
+          "avg_paper_seconds": 5.15,
+          "p50_paper_seconds": 5.15,
+          "throughput_per_min": 23.288,
+          "writer_peak_in_flight": 8,
+          "writer_calls": 48,
+          "speedup_vs_first": 2.0
+        },
+        {
+          "paper_concurrency": 4,
+          "papers": 6,
+          "elapsed_seconds": 10.33,
+          "avg_paper_seconds": 5.16,
+          "p50_paper_seconds": 5.17,
+          "throughput_per_min": 34.849,
+          "writer_peak_in_flight": 16,
+          "writer_calls": 48,
+          "speedup_vs_first": 2.99
+        }
+      ]
+    }
+  }
+}
