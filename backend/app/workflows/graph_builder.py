@@ -1,7 +1,9 @@
 
 # graph_builder.py —— LangGraph 工作流图构建器
+import asyncio
 import logging
 import re
+import time
 from typing import Optional
 
 from langgraph.graph import StateGraph, START, END
@@ -197,7 +199,21 @@ class PaperWorkflowGraph:
         }
 
     async def _write_sections(self, state: PaperState) -> dict:
-        """节点4：按大纲逐章撰写（把检索到的文献注入写作 Prompt）"""
+        """节点4：按大纲逐章撰写（受控并发 + 保序回填）。
+
+        2026-11-02 P0-2：由串行 for-await 改为 asyncio.gather 受控并发。
+        章节写作是纯网络等待（单章 6-10s），串行写 8 章 = 8 倍等待，
+        而章节之间没有数据依赖（各章拿同一批文献、各写自己的要点），
+        因此可以并发；用 Semaphore 限流，避免一次把 8 个请求全砸给 DeepSeek。
+
+        两个必须守住的约束：
+        1. **章节顺序**：sections_content 的插入序就是成文序（_polish_paper 按它拼全文，
+           _save_results 按它生成 order_index）。并发完成顺序是不确定的，
+           因此结果按大纲下标回填，绝不能"谁先写完谁在前"。
+        2. **失败可定位**：gather 用 return_exceptions=True 收齐所有结果，
+           报错时指明是哪一章、什么异常 —— 裸异常只告诉你"某处失败"，
+           并发下等于放弃排查。
+        """
         outline = state.get("outline") or {}
         sections = outline.get("sections") or []
 
@@ -219,17 +235,67 @@ class PaperWorkflowGraph:
             state.get("references") or []
         )
 
-        for section in sections:
+        # 每次写作轮次一个信号量：限的是「同一篇论文同一轮内的在途请求数」。
+        # 多篇论文同时生成时总在途 ≈ 篇数 × 该值，需要时按账号配额调小。
+        concurrency = max(1, int(settings.SECTION_CONCURRENCY or 1))
+        sem = asyncio.Semaphore(concurrency)
+        durations: list[float] = []   # 每章实际调用耗时：用来在日志里对账"串行本应多久"
+
+        async def _write_one(section: dict) -> str:
             title = section.get("title", "")
+            # 分章建议的匹配是纯字符串运算，放在信号量外，不占并发额度
             advice = _pick_section_advice(title, section_feedback)
-            result = await self.writer_agent.execute({
-                "section_title": title,
-                "outline_points": section.get("points", []),
-                "word_count": section.get("word_count", 800),
-                "feedback": advice or global_feedback,
-                "references": references,          # ← 修复点：原先漏传，写作时永远「暂无参考文献」
-            })
-            sections_content[title] = result.get("content", "")
+            # 计时器必须在信号量**里面**：在外面会把排队等额度的时间也算成"调用耗时"，
+            # 算出 6x 这种超过并发上限的假加速（并发上限 4，加速不可能 > 4）
+            async with sem:
+                t_call = time.perf_counter()
+                try:
+                    result = await self.writer_agent.execute({
+                        "section_title": title,
+                        "outline_points": section.get("points", []),
+                        "word_count": section.get("word_count", 800),
+                        "feedback": advice or global_feedback,
+                        "references": references,      # ← 修复点：原先漏传，写作时永远「暂无参考文献」
+                    })
+                finally:
+                    durations.append(time.perf_counter() - t_call)   # 失败也计入，别让分子漏掉
+            return result.get("content", "") or ""
+
+        t0 = time.perf_counter()
+        results = await asyncio.gather(
+            *[_write_one(s) for s in sections], return_exceptions=True
+        )
+        elapsed = time.perf_counter() - t0
+
+        # 取消必须原样上抛，不能包成普通异常（否则外层无法区分"用户断开"和"章节写挂了"）
+        for r in results:
+            if isinstance(r, asyncio.CancelledError):
+                raise r
+
+        failures = [
+            (sections[i].get("title", ""), r)
+            for i, r in enumerate(results)
+            if isinstance(r, BaseException)
+        ]
+        if failures:
+            detail = "；".join(f"「{t}」{type(e).__name__}: {e}" for t, e in failures)
+            logger.error(
+                "write_sections failed: %d/%d sections, concurrency=%d, %.1fs — %s",
+                len(failures), len(sections), concurrency, elapsed, detail,
+            )
+            raise RuntimeError(
+                f"章节写作失败（{len(failures)}/{len(sections)} 章）：{detail}"
+            ) from failures[0][1]
+
+        # 按大纲顺序回填（不是按完成顺序）：这是成文顺序的唯一保证
+        for section, content in zip(sections, results):
+            sections_content[section.get("title", "")] = content
+
+        logger.info(
+            "write_sections done: %d sections in %.1fs (concurrency=%d, 串行本应 %.1fs, 加速 %.2fx)",
+            len(sections), elapsed, concurrency, sum(durations),
+            (sum(durations) / elapsed) if elapsed else 0,
+        )
 
         return {
             "current_step": "writing",

@@ -40,6 +40,9 @@ def get_llm(
             # 实际一直吃服务端默认 4096，长评审 JSON 仍会被截断。
             # extra_body 是 OpenAI SDK 的透传口，能原样带上 max_tokens，实测生效。
             extra_body={"max_tokens": limit},
+            # P0-2：章节写作并发后，单篇同时在途 4 个请求，偶发 429/5xx 的概率上升。
+            # 不重试的话，一次限流就会让整章报废（并发下 gather 会连带整轮失败）。
+            max_retries=settings.LLM_MAX_RETRIES,
         )
 
     raise ValueError(f"不支持的模型提供商: {provider}（当前仅配置了 deepseek）")
