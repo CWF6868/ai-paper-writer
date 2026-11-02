@@ -190,7 +190,7 @@ pytest                # 需要先安装 requirements-dev.txt
 ### 已知优化点
 
 - **动态章节名枚举（方案 B）**：评审 Schema 评估过 `Literal[titles]` 动态枚举（章节名在生成时约束成固定选项，`_norm_section_name` 可彻底删除），因 schema 体积随章节数膨胀、且大纲标题常带「第3章」前缀污染枚举值、DeepSeek 对复杂 schema 遵循度下降，选择不用，保留「Schema 约束 + 归一化兜底」（方案 A）。
-- **观测落表**：当前为 JSON 结构化日志（`llm_call_log`/`agent_tool_log`/`review_dimension` 三表口径），SQLite 建表与维度聚合分析随 P0-3 成本归因一起做。
+- **观测落表**：`llm_call_log` 表已建成（P0-3），token / 缓存命中 / 成本 / 延迟按节点与用户归因，聚合接口见 `GET /api/metrics/llm`。
 
 ## P0-2 并发 + 异步化
 
@@ -228,6 +228,49 @@ pytest                # 需要先安装 requirements-dev.txt
 > 复现：`python scripts/bench_concurrency.py --tag after --papers 6 --levels 1,2,4`（stub，不耗额度）；`python scripts/eval_generate.py --out data/eval_generate_v5.json`；`python scripts/compare_eval.py --before data/eval_generate_v4.json --after data/eval_generate_v5.json`。
 > 设计细节与取舍：[`docs/P0-2-并发与异步化设计.md`](docs/P0-2-并发与异步化设计.md)。
 
+## P0-3 LLM 调用治理（成本）
+
+改造前成本完全不可见：没有 token 记录、没有节点归因、不知道缓存命中多少、更算不出"这篇论文花了多少钱"。
+
+### 计价的三条事实（先纠正口径，否则数字全错）
+
+1. 配置里的 `deepseek-chat` **已于 2026-07-24 下线**，仅作别名，实测响应 `model_name` 是 `deepseek-flash` → **按响应里的模型名归一化计价**，不能按配置值查表（否则查不到价、成本静默记 0）。
+2. **峰谷双价**（2026-08-17 生效）：北京时间工作日 09–12、14–18 为峰时，单价是空闲的 2 倍。同一 prompt 上午跑比晚上贵一倍。
+3. **缓存命中价仅为未命中的 1/30**，必须单独计量 `cache_hit_tokens`，否则成本虚高且看不出缓存的价值。
+
+### 改了什么
+
+| 位置 | 改动 |
+|---|---|
+| `core/llm_client.py`（新） | 单价表（缓存命中/未命中/输出 × 峰谷）、模型别名归一、`compute_cost`（Decimal 量化 1e-8）、`UsageRecord`、`extract_usage`、`CostTrackingCallback`、`llm_scope`、`capture_loop`、`build_chat_model` 唯一构造出口 |
+| `utils/llm.py` | 收敛为薄壳，避免超时/回调分叉 |
+| `workflows/graph_builder.py` | `_metered` 包装 7 个节点打 `node/paper_id/user_id` 标签，不动业务方法体 |
+| `models/llm_call_log.py`（新） | `cost` 用 `Numeric(18,8)`（单次常在 1e-5 元，Float 累加会漂）；**不加外键**（论文删了流水要留存）；`user_id` 列支撑按用户归因 |
+| `core/llm_log_sink.py`（新） | 非阻塞入队 + 每 0.5s / 50 条批量提交 + 哨兵停止 + 跨线程投递 + 对账 `stats()` |
+| `api/metrics.py`（新） | `GET /api/metrics/llm`：按节点 / 天 / 模型聚合 token、成本、延迟 |
+
+### 实测（2026-11-02，真实 DeepSeek）
+
+| 指标 | 值 |
+|---|---|
+| **单篇成本** | **0.0863 元**（三次独立测量区间 0.076–0.095） |
+| 调用次数 / token | 18 次｜输入 28,423 / 输出 12,346 / 缓存命中 8,192（28.8%） |
+| 缓存省下的钱 | 0.0119 元（成本的 **13.8%**） |
+| 错峰价值 | 同样 token 全在峰时要 0.1726 元 → 空闲时段省 **50%** |
+| 成本结构 | 输出 token 占 **64.4%**，输入未命中 35.2%，输入命中 0.5% |
+| 计量覆盖率 | **100%**（独立计数源 22/22） |
+| 落库开销 | 0.5 μs/次，一篇 22 次调用合计 **≈ 11 μs** |
+| 落库对账 | 18 收到 / 18 写入 / 0 丢弃，`balanced=True` |
+
+### 三句必须说清的话
+
+1. **成本由"生成多少字"决定**，不是"读了多少"。输出单价是输入未命中的 3 倍，而一次重写 = 多写 7–8 章 ≈ 成本翻倍。P0-1 把通过线从硬编码 `0.7` 调到 `0.44`，5/6 篇不再重写——**省的不只是时间，也是一半的钱**。
+2. **缓存有天花板**：它只作用于输入。命中率做到 100% 也只能省约 34%，救不了输出成本。
+3. **同一个坑踩了两次**：回调看似是异步的（继承 `AsyncCallbackHandler` 并实现 `aon_*`），实测（langchain-core 0.3.63）`ainvoke` 下真正调用的仍是**同步** `on_llm_end`，且在线程池 `asyncio_0` 里执行。第一次靠 `start()` 绑定 loop 侥幸没露馅，第二次走无 lifespan 的运行方式就整批丢了 16 条。现在 loop 由 `llm_scope` 里的 `capture_loop()` 记住，不依赖 `start()`。
+
+> 复现：`python scripts/report_llm_cost.py`（真实生成并出账单）；`--skip-generate` 只读已有数据。
+> 设计细节、单价口径分歧与遗留风险：[`docs/P0-3-LLM成本治理设计.md`](docs/P0-3-LLM成本治理设计.md)。
+
 ## API 摘要
 
 | 模块 | 端点 | 说明 |
@@ -238,6 +281,7 @@ pytest                # 需要先安装 requirements-dev.txt
 | 生成 | `POST /api/papers/{id}/stream-generate` | **SSE 流式生成**（推荐） |
 | 导出 | `GET /api/papers/{id}/export?format=docx\|pdf\|md` | 多格式导出 |
 | 选题 | `POST /api/topics/recommend` | 选题推荐 |
+| 成本 | `GET /api/metrics/llm?days=7&node=&user_id=` | LLM 调用成本/延迟聚合（普通用户仅自己，管理员可全量） |
 
 ## 环境变量
 

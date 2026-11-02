@@ -1,0 +1,118 @@
+{
+  "scope": {
+    "user_id": 2,
+    "global_view": false,
+    "days": 7,
+    "start": "2026-10-27T00:00:00+08:00",
+    "end": "2026-11-02T21:49:11.678616+08:00",
+    "timezone": "Asia/Shanghai (UTC+8)",
+    "node": null
+  },
+  "totals": {
+    "calls": 18,
+    "errors": 0,
+    "prompt_tokens": 28423,
+    "completion_tokens": 12346,
+    "cache_hit_tokens": 8192,
+    "total_tokens": 40769,
+    "cost": 0.0863131,
+    "avg_latency_ms": 4876.4,
+    "p95_latency_ms": 8941.2,
+    "papers": 1,
+    "calls_without_paper": 0,
+    "cost_per_paper": 0.0863131,
+    "cache_hit_rate": 0.2882,
+    "cache_savings": 0.0118784,
+    "peak_cost": 0.0,
+    "off_peak_cost": 0.0863131,
+    "peak_premium": 0.0,
+    "cost_if_all_peak": 0.1726262
+  },
+  "by_node": [
+    {
+      "key": "polish_paper",
+      "calls": 5,
+      "errors": 0,
+      "prompt_tokens": 5587,
+      "completion_tokens": 4523,
+      "cache_hit_tokens": 0,
+      "total_tokens": 10110,
+      "cost": 0.028734,
+      "avg_latency_ms": 4444.4,
+      "cost_share": 0.3329
+    },
+    {
+      "key": "quality_check",
+      "calls": 5,
+      "errors": 0,
+      "prompt_tokens": 18097,
+      "completion_tokens": 2527,
+      "cache_hit_tokens": 7680,
+      "total_tokens": 20624,
+      "cost": 0.027381,
+      "avg_latency_ms": 3306.1,
+      "cost_share": 0.3172
+    },
+    {
+      "key": "write_sections",
+      "calls": 7,
+      "errors": 0,
+      "prompt_tokens": 4189,
+      "completion_tokens": 4489,
+      "cache_hit_tokens": 128,
+      "total_tokens": 8678,
+      "cost": 0.0262984,
+      "avg_latency_ms": 6072.8,
+      "cost_share": 0.3047
+    },
+    {
+      "key": "generate_outline",
+      "calls": 1,
+      "errors": 0,
+      "prompt_tokens": 550,
+      "completion_tokens": 807,
+      "cache_hit_tokens": 384,
+      "total_tokens": 1357,
+      "cost": 0.0038997,
+      "avg_latency_ms": 6513.1,
+      "cost_share": 0.0452
+    }
+  ],
+  "by_day": [
+    {
+      "key": "2026-11-02",
+      "calls": 18,
+      "errors": 0,
+      "prompt_tokens": 28423,
+      "completion_tokens": 12346,
+      "cache_hit_tokens": 8192,
+      "total_tokens": 40769,
+      "cost": 0.0863131,
+      "avg_latency_ms": 4876.4,
+      "cost_share": 1.0
+    }
+  ],
+  "by_model": [
+    {
+      "key": "deepseek-flash",
+      "calls": 18,
+      "errors": 0,
+      "prompt_tokens": 28423,
+      "completion_tokens": 12346,
+      "cache_hit_tokens": 8192,
+      "total_tokens": 40769,
+      "cost": 0.0863131,
+      "avg_latency_ms": 4876.4,
+      "cost_share": 1.0
+    }
+  ],
+  "ingest": {
+    "received": 0,
+    "written": 0,
+    "pending": 0,
+    "dropped": 0,
+    "flush_failures": 0,
+    "balanced": true,
+    "note": "进程内计数，重启归零；balanced=False 表示成本表存在丢失，数字不可信"
+  }
+}
