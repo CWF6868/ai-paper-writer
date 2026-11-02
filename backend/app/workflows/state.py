@@ -38,12 +38,17 @@ class PaperState(TypedDict, total=False):
     formatted_references: Optional[str]  # 格式化后的参考文献文本
 
     # ---- 质量控制 ----
-    quality_score: float
+    quality_score: Optional[float]   # None = 评审降级（不编分数）
+    quality_degraded: bool           # True = 本轮评审不可用，跳过质量门禁放行
     quality_comment: Optional[str]      # 评审意见（LLM 评审专家输出）
     quality_dimensions: List[dict]      # 各维度评分明细
     quality_section_feedback: List[dict]  # 分章节改进建议 [{section, advice}]，供重写时逐章下发
     revision_count: int
     max_revisions: int
+    # 首次质量检查的分数（重写前的原始分数）。用途：标定质量阈值 ——
+    # 只有知道「未重写时能拿多少分」，才能判断阈值该定在哪（否则阈值只能靠猜，
+    # 2026-11-01 实测就卡在这里：最终分 0.44-0.53，但首检分无记录）。
+    first_pass_score: Optional[float]
 
     # ---- 历史最优版本（best-so-far）----
     # 评审打分本身有抖动，重写后分数可能反而更低。这里记录「截至目前得分最高」

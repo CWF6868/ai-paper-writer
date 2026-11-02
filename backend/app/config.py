@@ -22,8 +22,30 @@ class Settings(BaseSettings):
     DASHSCOPE_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     DASHSCOPE_MODEL: str = "text-embedding-v3"
 
+    # ---- 模型输出上限 ----
+    # 评审要输出 5 个维度的点评 + 原文证据 + 分章建议，长文评审的输出常超过
+    # 供应商默认上限（DeepSeek 默认 4096），导致 function calling 的 JSON 参数
+    # 被截断成非法 JSON → 三级降级全失败 → 整篇评审作废（2026-11-02 实测到）。
+    # DeepSeek 支持最大 8192，这里取满；可用 .env 的 LLM_MAX_TOKENS 覆盖。
+    LLM_MAX_TOKENS: int = 8192
+
     # ---- 向量库 ----
     VECTOR_DB_PATH: str = "./data/chroma"
+
+    # ---- 质量控制 ----
+    # 质量检查通过线：评审分 >= 该值才结束，否则打回重写。
+    # 0.44 的依据（2026-11-02 端到端实测，6 篇真实生成 + 首检分观测）：
+    #   首检分实测 0.42 / 0.42 / 0.44 / 0.44 / 0.44 / 0.49（中位数 0.44，
+    #   重写后 0.42-0.51）。按数据推演：
+    #     <=0.42 → 重写率 0%，门禁失效；
+    #     0.43-0.44 → 重写率 33%，平均质量 0.445；
+    #     0.45-0.49 → 重写率 83%，平均质量 0.457；
+    #     >=0.50 → 重写率 100%，门禁退化成固定流程。
+    #   取 0.44 = 实测中位数：中位数以上直接放行，以下才重写。
+    #   质量差异（-0.015）在评分噪声带（0.02）内，换来重写率从 100% 降到 33%。
+    # 标定方法：scripts/analyze_threshold.py（用实测首检分/重写后分推演每个阈值的后果）。
+    # 可用 .env 的 QUALITY_PASS_THRESHOLD 覆盖。
+    QUALITY_PASS_THRESHOLD: float = 0.44
 
     # ---- JWT ----
     SECRET_KEY: str = "dev-secret-change-me"

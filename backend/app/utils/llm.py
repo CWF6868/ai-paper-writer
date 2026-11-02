@@ -11,12 +11,18 @@ def get_llm(
     model: Optional[str] = None,
     temperature: float = 0.7,
     streaming: bool = False,
+    max_tokens: Optional[int] = None,
 ):
     """
     返回一个大模型(LLM)实例，供所有 Agent 使用。
     provider 决定用哪家：deepseek（本系统已配置）。
+
+    max_tokens 默认取 settings.LLM_MAX_TOKENS：不显式设置时会落到供应商默认值
+    （DeepSeek 为 4096），长文评审的结构化输出会被截断成非法 JSON，进而触发
+    三级降级、整篇评审作废。这是真实故障，不是保守起见。
     """
     provider = provider or settings.LLM_PROVIDER
+    limit = max_tokens or settings.LLM_MAX_TOKENS
 
     if provider == "deepseek":
         return ChatOpenAI(
@@ -25,6 +31,7 @@ def get_llm(
             base_url=settings.DEEPSEEK_BASE_URL,
             temperature=temperature,
             streaming=streaming,
+            max_tokens=limit,
         )
 
     raise ValueError(f"不支持的模型提供商: {provider}（当前仅配置了 deepseek）")

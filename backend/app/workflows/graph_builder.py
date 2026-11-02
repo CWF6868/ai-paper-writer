@@ -1,5 +1,6 @@
 
 # graph_builder.py —— LangGraph 工作流图构建器
+import logging
 import re
 from typing import Optional
 
@@ -7,12 +8,17 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.workflows.state import PaperState
+from app.config import settings
 from app.agents.topic_agent import TopicAgent
 from app.agents.outline_agent import OutlineAgent
 from app.agents.writer_agent import WriterAgent
 from app.agents.reference_agent import ReferenceAgent
 from app.agents.polish_agent import PolishAgent
 from app.agents.reviewer_agent import ReviewerAgent
+from app.llm.structured import StructuredOutputError
+from app.llm.tools.context import set_current_references
+
+logger = logging.getLogger(__name__)
 
 def _norm_section_name(name: str) -> str:
     """把「第3章 实验结果」「三、实验结果」「3. 实验结果」统一成「实验结果」。"""
@@ -154,15 +160,25 @@ class PaperWorkflowGraph:
         }
 
     async def _generate_outline(self, state: PaperState) -> dict:
-        """节点2：生成论文大纲"""
-        result = await self.outline_agent.execute({
-            "title": state.get("title", ""),
-            "paper_type": "research",
-            "word_limit": 6000,
-        })
+        """节点2：生成论文大纲（Schema 结构化输出）。
+
+        大纲 Agent 三级降级全失败时不再拿 {"raw": ...} 假装是大纲：
+        返回空 outline，由 _write_sections 的「整篇当一节写」兜底接住。
+        """
+        try:
+            result = await self.outline_agent.execute({
+                "title": state.get("title", ""),
+                "paper_type": "research",
+                "word_limit": 6000,
+            })
+            outline_dict = result.get("outline_dict") or {}
+        except StructuredOutputError as e:
+            # 原因必须写进 message：默认 Formatter 不渲染 extra，写 extra 等于丢弃
+            logger.error("outline degraded (node=generate_outline): %s", e)
+            outline_dict = {}
         return {
             "current_step": "outline",
-            "outline": result.get("outline_dict") or {},
+            "outline": outline_dict,
         }
 
     async def _retrieve_references(self, state: PaperState) -> dict:
@@ -263,39 +279,65 @@ class PaperWorkflowGraph:
 
     async def _quality_check(self, state: PaperState) -> dict:
         """
-        节点7：质量检查（LLM 评审版）。
-        调用 ReviewerAgent 让大模型从 5 个维度打分并给改进建议；
-        解析失败或调用异常时，退回旧的启发式评分（有正文+有文献=0.8），保证流程不崩。
+        节点7：质量检查（LLM 评审版，Schema 结构化输出 + 工具调用）。
+
+        评审不可用（异常 / 三级降级全失败 / 分数越界）时，不再编造 0.8 假分数：
+        quality_score=None + quality_degraded=True，放行但不假装合格。
+        假分数会进库、进评测统计，是数据污染——比功能缺失严重得多。
         """
         revision_count = state.get("revision_count", 0)
 
-        # 兜底：启发式评分（与旧版一致）
-        def fallback_score(reason: str):
-            has_content = bool(state.get("final_paper"))
-            has_refs = bool(state.get("references"))
-            return 0.8 if (has_content and has_refs) else 0.5, reason, []
+        def _degraded(reason: str) -> dict:
+            """显式降级：不编分数、不动历史最优、不塞脏建议。"""
+            return {
+                "current_step": "quality_check",
+                "quality_score": None,
+                "quality_degraded": True,
+                "quality_comment": f"评审不可用（{reason}），本轮跳过质量门禁",
+                "quality_dimensions": [],
+                "quality_section_feedback": [],
+                "revision_count": revision_count + 1,
+            }
 
-        section_feedback = []
         try:
-            result = await self.reviewer_agent.execute({
-                "title": state.get("title", ""),
-                "topic": state.get("topic", ""),
-                "content": state.get("final_paper", ""),
-                "references": state.get("formatted_references", ""),
-            })
-            data = result.get("data") or {}
-            raw_score = data.get("score")
-            # 分章节建议：评审逐章给出的改进点，重写时按章节下发，
-            # 避免把整篇意见套给每一章（那会让各章重复回应同一问题、互相打架）
-            section_feedback = data.get("section_feedback") or []
-            if raw_score is None:
-                score, comment, dimensions = fallback_score("（评审结果解析失败，使用基础评分）")
-            else:
-                score = max(0.0, min(1.0, float(raw_score)))
-                comment = data.get("overall", "") or ""
-                dimensions = data.get("dimensions", []) or []
-        except Exception as e:
-            score, comment, dimensions = fallback_score(f"（评审服务异常，使用基础评分：{e}）")
+            # 工具上下文注入：verify_citation / search_literature 从这里拿文献列表，
+            # 用 contextvars 保证并发评审时数据不串（不能塞进全局变量）
+            with set_current_references(state.get("references") or []):
+                result = await self.reviewer_agent.execute({
+                    "title": state.get("title", ""),
+                    "topic": state.get("topic", ""),
+                    "content": state.get("final_paper", ""),
+                    "references": state.get("formatted_references", ""),
+                })
+        except Exception as e:  # 评审服务整体异常 → 显式降级，不崩流程也不编分数
+            # 原因必须写进 message：默认 Formatter 不渲染 extra，写 extra 等于丢弃
+            logger.error("reviewer degraded (node=quality_check): %s", e)
+            return _degraded(str(e))
+
+        data = result.get("data") or {}
+        raw_score = data.get("score")
+        # 防御：任何路径漏进来的缺失分/越界分都按降级处理（Pydantic 正常已拦住，
+        # 这里兜住「reviewer 被外部替换成非结构化实现」这类情况）
+        if raw_score is None:
+            return _degraded("评审结果缺少 score")
+        try:
+            score = round(float(raw_score), 2)
+        except (TypeError, ValueError):
+            return _degraded(f"分数不可解析: {raw_score!r}")
+        if not (0.0 <= score <= 1.0):
+            return _degraded(f"分数越界: {score}")
+
+        comment = data.get("overall", "") or ""
+        dimensions = data.get("dimensions", []) or []
+        # 分章节建议：minor 级建议不进重写（改小问题反而破坏结构），只下发 blocking/major
+        section_feedback = [
+            fb for fb in (data.get("section_feedback") or [])
+            if isinstance(fb, dict) and str(fb.get("severity", "major")).lower() != "minor"
+        ]
+        # must_fix（blocking 级清单）拼进评审意见，驱动下一轮重写有的放矢
+        must_fix = [str(m) for m in (data.get("must_fix") or []) if str(m).strip()]
+        if must_fix:
+            comment = comment + "\n必须修复：\n" + "\n".join(f"- {m}" for m in must_fix)
 
         # 记录「历史最优版本」：评审分数有抖动，重写后可能反而更低，
         # 因此每轮都和历史最高分比较，只保留更好的那一版，避免最终保存的是退化版本。
@@ -317,6 +359,11 @@ class PaperWorkflowGraph:
         return {
             "current_step": "quality_check",
             "quality_score": score,
+            "quality_degraded": False,
+            # 首检分只记一次：后续重写轮次不覆盖，用于标定质量阈值
+            "first_pass_score": (
+                score if revision_count == 0 else (state.get("first_pass_score") or score)
+            ),
             "quality_comment": comment,
             "quality_dimensions": dimensions,
             "quality_section_feedback": section_feedback,
@@ -339,8 +386,10 @@ class PaperWorkflowGraph:
         return "recommend"
 
     def _check_quality(self, state: PaperState) -> str:
-        """质量检查的路由：达标或通过次数用尽 → 结束；否则 → 打回重写"""
-        if state.get("quality_score", 0) >= 0.7:
+        """质量检查的路由：评审降级 → 放行但不假装合格；达标或次数用尽 → 结束；否则 → 打回重写"""
+        if state.get("quality_degraded"):
+            return "pass"     # 评审不可用：放行，但不编分数
+        if (state.get("quality_score") or 0) >= settings.QUALITY_PASS_THRESHOLD:
             return "pass"
         if state.get("revision_count", 0) >= state.get("max_revisions", 3):
             return "pass"
