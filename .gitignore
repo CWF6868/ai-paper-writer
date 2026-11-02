@@ -36,6 +36,9 @@ probe_*.py
 # ============ 历史备份（本地保留，不入库） ============
 backend/_backup_*/
 
+# 个人职业规划文档：仅本地留存，不随仓库分发
+docs/求职提升路线图.md
+
 # ============ Node / 前端 ============
 frontend/node_modules/
 frontend/dist/
