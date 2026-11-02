@@ -192,6 +192,42 @@ pytest                # 需要先安装 requirements-dev.txt
 - **动态章节名枚举（方案 B）**：评审 Schema 评估过 `Literal[titles]` 动态枚举（章节名在生成时约束成固定选项，`_norm_section_name` 可彻底删除），因 schema 体积随章节数膨胀、且大纲标题常带「第3章」前缀污染枚举值、DeepSeek 对复杂 schema 遵循度下降，选择不用，保留「Schema 约束 + 归一化兜底」（方案 A）。
 - **观测落表**：当前为 JSON 结构化日志（`llm_call_log`/`agent_tool_log`/`review_dimension` 三表口径），SQLite 建表与维度聚合分析随 P0-3 成本归因一起做。
 
+## P0-2 并发 + 异步化
+
+三处浪费，按金额排序：**章节串行**（8 章 × 6–10s，章节之间零依赖却排队写）、**假异步检索**（`async def` 里同步调 embedding HTTP + Chroma）、**导出阻塞事件循环**（`build_pdf` 实测 636ms，导出期间整个进程的 SSE 进度僵住）。
+
+### 改了什么
+
+| 位置 | 改动 |
+|---|---|
+| `graph_builder._write_sections` | 串行 `for`+`await` → `asyncio.gather` + `Semaphore(4)`（`SECTION_CONCURRENCY` 可配） |
+| 同上：顺序 | 结果**按大纲下标回填**，不按完成顺序（`sections_content` 插入序 = 成文序，`_polish_paper` 拼接与 `order_index` 都依赖它） |
+| 同上：失败 | `return_exceptions=True` 收齐后按章报错：`章节写作失败（1/4 章）：「第2章」ValueError: ...`，`CancelledError` 原样上抛 |
+| `rag/retriever.search` | `to_thread(vector_store.search, ...)` |
+| `api/export` | `to_thread(build_docx / build_pdf, ...)`，派发前强制加载 `references` 防止线程内惰性加载 |
+| `utils/llm.get_llm` | `max_retries=3`（并发抬高后偶发 429 的概率上升，不重试则一次限流整章报废） |
+
+### 实测（2026-11-02）
+
+| 口径 | 改造前 | 改造后 | 变化 |
+|---|---|---|---|
+| **同一篇、同 2 轮重写**（题目1） | 205.3s | **129.3s** | **−37.0%** |
+| **每章次耗时**（÷ 章节数 × 质检次数，归一化） | 13.8s | **8.8s** | **−35.7%** |
+| 6 篇整体（含结构性差异，见下） | 210.2s | 76.9s | −63.4% |
+| 单机吞吐（论文级并发 1，stub 基准） | 5.35 篇/分 | **11.64 篇/分** | 2.18× |
+| 单机吞吐（论文级并发 4） | 16.05 篇/分 | **34.87 篇/分** | 2.17× |
+| 写作段内部（8 章 / 并发 4） | 8.0s | **2.0s** | 4.00× |
+| 平均质量分 | 0.450 | 0.468 | 在 ±0.02 噪声带内 |
+
+### 三句必须说清的话
+
+1. **−63.4% 不等于并发收益**。V4 是 10:36 跑的，当时判定硬编码 `>= 0.7`，6 篇首检分（0.42–0.52）全不达标 → 100% 重写；V5 用 0.44 阈值 → 5/6 篇一次过。少写一轮等于少写 7–8 章。**并发的净效果看同条件 −37.0% 与归一化 −35.7%（两个独立口径互证）。**
+2. **`to_thread` 不加速单次导出**。python-docx / fpdf2 是 CPU 密集型，GIL 挡着，收益只有「导出期间事件循环仍可调度」（对照实测：同步阻塞 200ms → tick 0 次；`to_thread` → tick 14 次）。
+3. **为什么不是 4 倍**。用题目1 两轮数据反解：`16w + F = 205.3`、`4w + F = 129.3` → `w ≈ 6.3s/章`、`F ≈ 104s`。约 104s 的固定段（大纲 / 润色 / 评审，全部依赖全文，不可并发化）决定了单篇下限。
+
+> 复现：`python scripts/bench_concurrency.py --tag after --papers 6 --levels 1,2,4`（stub，不耗额度）；`python scripts/eval_generate.py --out data/eval_generate_v5.json`；`python scripts/compare_eval.py --before data/eval_generate_v4.json --after data/eval_generate_v5.json`。
+> 设计细节与取舍：[`docs/P0-2-并发与异步化设计.md`](docs/P0-2-并发与异步化设计.md)。
+
 ## API 摘要
 
 | 模块 | 端点 | 说明 |

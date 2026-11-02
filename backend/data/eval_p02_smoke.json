@@ -1,0 +1,59 @@
+{
+  "summary": {
+    "n": 1,
+    "total_seconds": 66.3,
+    "avg_seconds": 66.3,
+    "min_seconds": 66.3,
+    "max_seconds": 66.3,
+    "median_seconds": 66.3,
+    "avg_word_count": 9305,
+    "avg_references": 5,
+    "total_references": 5,
+    "avg_body_citations": 5,
+    "rewrite_triggered_count": 0,
+    "rewrite_trigger_rate": 0.0,
+    "avg_revision_count": 1,
+    "revision_count_distribution": {
+      "1": 1
+    },
+    "avg_rewrite_rounds": 0,
+    "rewrite_rounds_distribution": {
+      "0": 1
+    },
+    "avg_quality_score": 0.44,
+    "first_pass_scores": [
+      0.44
+    ],
+    "avg_first_pass_score": 0.44
+  },
+  "papers": [
+    {
+      "id": 1,
+      "title": "基于检索增强生成的大语言模型幻觉缓解研究",
+      "status": "ok",
+      "seconds": 66.3,
+      "word_count": 9305,
+      "revision_count": 1,
+      "rewrite_triggered": false,
+      "quality_score": 0.44,
+      "first_pass_score": 0.44,
+      "sections": 7,
+      "references_count": 5,
+      "reference_titles": [
+        "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "LLaMA: Open and Efficient Foundation Language Models",
+        "Zero-Shot Text-to-Image Generation",
+        "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+        "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness"
+      ],
+      "body_citation_markers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "body_citation_count": 5
+    }
+  ]
+}
