@@ -24,6 +24,22 @@ def test_get_llm_rejects_unknown_provider():
         get_llm(provider="openai")
 
 
+def test_get_llm_sends_max_tokens_via_extra_body():
+    """回归：langchain-openai 0.2.x 会把 max_tokens 改写成 max_completion_tokens，
+    而 DeepSeek 忽略该字段（实测 16 上限仍输出 246 tokens）→ 上限配置形同虚设。
+    必须走 extra_body 透传 max_tokens，且请求里不能出现 max_completion_tokens。
+    """
+    llm = get_llm()
+    params = llm._default_params
+    assert params["extra_body"]["max_tokens"] == settings.LLM_MAX_TOKENS
+    assert "max_completion_tokens" not in params
+
+
+def test_get_llm_honours_explicit_max_tokens():
+    llm = get_llm(max_tokens=256)
+    assert llm._default_params["extra_body"]["max_tokens"] == 256
+
+
 def test_get_embedding_model_disables_ctx_length_check():
     """百炼兼容接口只吃纯文本，必须关掉 langchain 的 token 预处理"""
     emb = get_embedding_model()

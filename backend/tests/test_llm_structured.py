@@ -463,10 +463,16 @@ def test_clean_messages_replaces_system_and_drops_tool_roundtrip():
 
 def test_llm_sets_max_tokens_explicitly():
     """不显式设 max_tokens 会落到 DeepSeek 默认 4096，长评审 JSON 被截断成非法 JSON，
-    三级降级全失败导致整篇评审作废（2026-11-02 实测）。这里锁死：必须显式设置。"""
+    三级降级全失败导致整篇评审作废（2026-11-02 实测）。
+
+    这里断言的是**真正会发出去的字段**，而不是 ChatOpenAI 对象上的属性：
+    langchain-openai 0.2.10 会把 max_tokens= 改写成 max_completion_tokens，
+    而 DeepSeek 忽略后者（实测上限 16 仍输出 246 tokens），属性看着对、请求是空的。
+    """
     from app.config import settings
     from app.utils.llm import get_llm
 
-    llm = get_llm(temperature=0.0)
-    assert llm.max_tokens is not None
-    assert llm.max_tokens == settings.LLM_MAX_TOKENS >= 8192
+    params = get_llm(temperature=0.0)._default_params
+    assert settings.LLM_MAX_TOKENS >= 8192
+    assert params["extra_body"]["max_tokens"] == settings.LLM_MAX_TOKENS
+    assert "max_completion_tokens" not in params

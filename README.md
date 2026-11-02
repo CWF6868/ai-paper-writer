@@ -132,7 +132,7 @@ pytest                # 需要先安装 requirements-dev.txt
 | 章节名匹配 | 正则模糊匹配为主 | Schema「逐字抄写」约束为主，`_norm_section_name` 降为兜底 |
 | 工具调用预算 | — | **≤ 2 轮 / ≤ 6 次**（单测锁定） |
 | 观测日志可见性 | 无 logging 配置，INFO 全丢 | 包入口 `app/__init__.py` 统一 `setup_logging`，INFO 可见 |
-| 模型输出上限 | 未设置（落到 4096 默认值） | 显式 `LLM_MAX_TOKENS=8192`，防长评审 JSON 被截断 |
+| 模型输出上限 | 未设置（落到 4096 默认值） | `LLM_MAX_TOKENS=8192`，且经 `extra_body` 透传为 `max_tokens`（langchain-openai 会把它改写成 DeepSeek 不认的 `max_completion_tokens`，实测直接失效） |
 | 测试 | 216 | **239**（含 schema/降级链/灰区/预算/收口清洗/并发隔离/形状漂移/分制漂移/阈值标定 22 项新防线） |
 
 ### 端到端实测（最新：2026-11-02，6 篇真实生成 + 首检分观测）
@@ -164,6 +164,7 @@ pytest                # 需要先安装 requirements-dev.txt
 **这一轮评测又抓出 4 个真实缺陷**（均已修复并锁进测试）：
 
 1. **`max_tokens` 未设置**（最严重）：不显式设置时落到 DeepSeek 默认 4096，评审要输出 5 个维度的长点评+原文证据，JSON 参数被截断成非法 JSON → 三级降级全失败 → 整篇评审作废。实测第 2 篇因此降级。现固定 `settings.LLM_MAX_TOKENS=8192`。
+   > **2026-11-02 复查补充**：只写 `max_tokens=8192` 参数其实**没生效**。langchain-openai 0.2.10 会把该参数改写成 `max_completion_tokens` 再发请求，而 DeepSeek 兼容接口不认这个字段、静默忽略（对照实测：`max_tokens=16` → `finish_reason=length`、只出 47 字符；`max_completion_tokens=16` → `finish_reason=stop`、照常输出 246 tokens）。现改为 `extra_body={"max_tokens": limit}` 透传，并由 `test_get_llm_sends_max_tokens_via_extra_body` 锁住「请求里必须没有 `max_completion_tokens`」。此前截断现象消失，实际是评审输出变短所致，不是这个配置起了作用。
 2. **10 分制漂移**：模型偶尔按 10 分制打分（`score=2.2`、`overall_score=6.5`），0-1 校验直接判死。现在「全部分数都 >1 且 ≤10」时归一化，个别字段越界仍拒绝（不能靠除以 10 把垃圾洗成合法值）。
 3. **外层包装/字段别名**：模型给出 `{"review": {"overall_score": …, "summary": …}}`，现自动拆包并映射 `overall_score→score`、`summary→overall`。
 4. 补跑工具 `scripts/eval_one.py`：单篇失败只补跑该篇，不必整轮重跑。

@@ -31,7 +31,15 @@ def get_llm(
             base_url=settings.DEEPSEEK_BASE_URL,
             temperature=temperature,
             streaming=streaming,
-            max_tokens=limit,
+            # 关键：**不要**传 max_tokens= 参数。
+            # langchain-openai 0.2.x 会把这个值改写成 max_completion_tokens 再发给服务端，
+            # 而 DeepSeek 的兼容接口不认这个字段 —— 实测（2026-11-02）：
+            #   请求带 max_tokens=16           → finish_reason=length，只出 47 字符（生效）
+            #   请求带 max_completion_tokens=16 → finish_reason=stop，照常输出 246 tokens（被忽略）
+            # 也就是说「设置 LLM_MAX_TOKENS=8192」在新版 langchain 下曾是一句空话，
+            # 实际一直吃服务端默认 4096，长评审 JSON 仍会被截断。
+            # extra_body 是 OpenAI SDK 的透传口，能原样带上 max_tokens，实测生效。
+            extra_body={"max_tokens": limit},
         )
 
     raise ValueError(f"不支持的模型提供商: {provider}（当前仅配置了 deepseek）")
