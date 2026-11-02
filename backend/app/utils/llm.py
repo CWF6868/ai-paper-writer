@@ -1,10 +1,16 @@
-# utils/llm.py —— 统一的模型接入层（大脑 + 向量化）
+# utils/llm.py —— 模型接入层的对外门面
+#
+# P0-3 起，ChatOpenAI 的构造已收口到 app/core/llm_client.py（统一管理超时、
+# 重试、用量计量回调）。这里只保留原有函数签名，避免全项目 import 改动，
+# 同时保证「只有一个地方能造模型」——否则超时/回调必然分叉，成本就统计不全。
 from typing import Optional
 
 from fastapi import HTTPException
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from app.config import settings
+from app.core.llm_client import build_chat_model, build_embedding_model
+from app.core.llm_client import CostTrackingCallback  # noqa: F401  供需要显式挂载的调用方使用
+
 
 def get_llm(
     provider: Optional[str] = None,
@@ -22,44 +28,26 @@ def get_llm(
     三级降级、整篇评审作废。这是真实故障，不是保守起见。
     """
     provider = provider or settings.LLM_PROVIDER
-    limit = max_tokens or settings.LLM_MAX_TOKENS
 
     if provider == "deepseek":
-        return ChatOpenAI(
-            model=model or settings.DEEPSEEK_MODEL,
-            api_key=settings.DEEPSEEK_API_KEY,
-            base_url=settings.DEEPSEEK_BASE_URL,
+        return build_chat_model(
+            model=model,
             temperature=temperature,
             streaming=streaming,
-            # 关键：**不要**传 max_tokens= 参数。
-            # langchain-openai 0.2.x 会把这个值改写成 max_completion_tokens 再发给服务端，
-            # 而 DeepSeek 的兼容接口不认这个字段 —— 实测（2026-11-02）：
-            #   请求带 max_tokens=16           → finish_reason=length，只出 47 字符（生效）
-            #   请求带 max_completion_tokens=16 → finish_reason=stop，照常输出 246 tokens（被忽略）
-            # 也就是说「设置 LLM_MAX_TOKENS=8192」在新版 langchain 下曾是一句空话，
-            # 实际一直吃服务端默认 4096，长评审 JSON 仍会被截断。
-            # extra_body 是 OpenAI SDK 的透传口，能原样带上 max_tokens，实测生效。
-            extra_body={"max_tokens": limit},
-            # P0-2：章节写作并发后，单篇同时在途 4 个请求，偶发 429/5xx 的概率上升。
-            # 不重试的话，一次限流就会让整章报废（并发下 gather 会连带整轮失败）。
-            max_retries=settings.LLM_MAX_RETRIES,
+            max_tokens=max_tokens,
         )
 
     raise ValueError(f"不支持的模型提供商: {provider}（当前仅配置了 deepseek）")
 
+
 def get_embedding_model():
     """
     返回一个向量化(Embedding)模型实例，供 RAG 使用。
-    关键参数 check_embedding_ctx_length=False：
+    关键参数 check_embedding_ctx_length=False 由 llm_client 统一设置：
     langchain 默认会先把文本转成 token 编号数组再发送（OpenAI 官方接口支持），
     但百炼兼容接口只接受纯文本字符串，必须关掉这个预处理，否则报 400。
     """
-    return OpenAIEmbeddings(
-        model=settings.DASHSCOPE_MODEL,
-        api_key=settings.DASHSCOPE_API_KEY,
-        base_url=settings.DASHSCOPE_BASE_URL,
-        check_embedding_ctx_length=False,
-    )
+    return build_embedding_model()
 
 
 def check_llm_config(require_embedding: bool = True):
