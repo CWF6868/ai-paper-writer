@@ -1,4 +1,5 @@
 # retriever.py —— 文献检索器（供 ReferenceAgent 调用）
+import asyncio
 from typing import List, Dict, Optional
 
 from app.rag.vector_store import vector_store
@@ -20,9 +21,18 @@ class ReferenceRetriever:
         top_k: Optional[int] = None,
         filters: Optional[Dict] = None,
     ) -> List[Dict]:
-        """按语义相似度检索文献，可附加过滤条件（如年份）"""
+        """按语义相似度检索文献，可附加过滤条件（如年份）
+
+        P0-2：这里以前是「async def 里直接调同步方法」——典型的假异步。
+        `vector_store.search` 内部要做两件阻塞的事：调百炼算 query 向量（同步 HTTP），
+        再查 Chroma（同步磁盘/CPU）。在事件循环线程里跑，等于整篇论文生成期间
+        所有协程一起排队等这一次 embedding。
+
+        现在整段丢进线程池：协程让出事件循环，多篇并发生成不再互相拖累。
+        （与 app/llm/tools/citation.py 里 `asyncio.to_thread(_embed, ...)` 的做法一致。）
+        """
         k = top_k or self.top_k
-        results = self.vector_store.search(query, top_k=k)
+        results = await asyncio.to_thread(self.vector_store.search, query, k)
 
         docs = []
         for r in results:
