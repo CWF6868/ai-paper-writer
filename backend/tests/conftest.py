@@ -25,9 +25,11 @@ import app.models.user  # noqa: F401  确保模型注册进 Base.metadata
 import app.models.paper  # noqa: F401
 import app.models.chapter  # noqa: F401
 import app.models.reference  # noqa: F401
+import app.models.llm_call_log  # noqa: F401  P0-3 成本流水表
 
 from app.database import AsyncSessionLocal, Base, engine
-from app.main import _ensure_quality_columns, app
+from app.core.llm_log_sink import usage_log_sink
+from app.main import _ensure_llm_log_columns, _ensure_quality_columns, app
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
@@ -36,6 +38,7 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _ensure_quality_columns(conn)
+        await _ensure_llm_log_columns(conn)
     yield
     await engine.dispose()
 
@@ -43,8 +46,12 @@ async def init_db():
 @pytest_asyncio.fixture(autouse=True)
 async def clean_tables(init_db):
     """每个用例前清空所有表，保证用例间互不影响"""
+    # 先停掉上一个用例遗留的后台落库任务：每个用例是独立事件循环，
+    # 旧 loop 上的 flush task 已经失效，留着会跨 loop 写库并产生告警。
+    await usage_log_sink.stop()
     async with AsyncSessionLocal() as db:
-        for t in ("chapters", "references", "papers", "users"):
+        # llm_call_log 无外键依赖，先删它不会触发约束问题
+        for t in ("llm_call_log", "chapters", "references", "papers", "users"):
             await db.execute(text(f'DELETE FROM "{t}"'))
         await db.commit()
     yield
