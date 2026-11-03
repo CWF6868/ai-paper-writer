@@ -38,6 +38,9 @@ class WriterAgent(BaseAgent):
 - 语言精练，避免冗余"""
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        # 论文题目必须显式传入：只给章节名时，模型不知道这一章服务于哪篇论文，
+        # 写出来的就是一篇「通用段落」——不同论文的同一章节会高度雷同。
+        paper_title = input_data.get("paper_title", "")
         section_title = input_data.get("section_title", "")
         outline_points = input_data.get("outline_points", [])
         references = input_data.get("references", [])
@@ -64,6 +67,8 @@ class WriterAgent(BaseAgent):
             ("system", self.get_system_prompt()),
             ("user", """请撰写以下章节内容：
 
+## 论文题目：{paper_title}
+
 ## 章节标题：{section_title}
 
 ### 内容要点：
@@ -78,6 +83,7 @@ class WriterAgent(BaseAgent):
 ### 要求：
 - 写作风格：{style}
 - 预估字数：{word_count} 字左右
+- 内容必须紧扣上方「论文题目」，不要写成与该题目无关的通用段落
 - 请完整撰写该章节内容，确保学术性和专业性
 - 若使用文献，必须标注对应编号（如 [1]）；只能使用上方列表中已有的文献，禁止编造
 - 若上方列表为「暂无参考文献」，则不要生成任何 [n] 形式的引用标注
@@ -88,6 +94,7 @@ class WriterAgent(BaseAgent):
         chain = prompt | self.llm | StrOutputParser()
 
         result = await chain.ainvoke({
+            "paper_title": paper_title or "（未提供）",
             "section_title": section_title,
             "points": points_text,
             "references": refs_text,
@@ -99,13 +106,14 @@ class WriterAgent(BaseAgent):
         return {"content": result}
 
     async def stream_execute(self, input_data: Dict[str, Any]) -> AsyncIterator[str]:
+        paper_title = input_data.get("paper_title", "")
         section_title = input_data.get("section_title", "")
         outline_points = input_data.get("outline_points", [])
         points_text = "\n".join(f"- {p}" for p in outline_points)
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", self.get_system_prompt()),
-            ("user", f"章节标题：{section_title}\n内容要点：\n{points_text}\n\n请开始撰写。"),
+            ("user", f"论文题目：{paper_title or '（未提供）'}\n章节标题：{section_title}\n内容要点：\n{points_text}\n\n请开始撰写。"),
         ])
         chain = prompt | self.llm | StrOutputParser()
 

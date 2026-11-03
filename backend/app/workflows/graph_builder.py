@@ -271,6 +271,8 @@ class PaperWorkflowGraph:
                 t_call = time.perf_counter()
                 try:
                     result = await self.writer_agent.execute({
+                        # 论文题目必须传：否则每章只能拿到章节名，写出来是同质化的通用段落
+                        "paper_title": state.get("title", ""),
                         "section_title": title,
                         "outline_points": section.get("points", []),
                         "word_count": section.get("word_count", 800),

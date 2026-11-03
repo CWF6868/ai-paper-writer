@@ -67,7 +67,11 @@ async def test_outline_structured_hits_function_calling():
 
     assert mode == "function_calling"
     assert result.title == "检索增强生成研究"
-    assert [s.title for s in result.sections] == ["摘要", "引言", "相关工作", "方法", "实验与分析", "结论"]
+    titles = [s.title for s in result.sections]
+    # 骨架是 6 章、首尾固定，中间允许带题目槽位（不同选题的章节名必须不一样）
+    assert len(titles) == 6
+    assert titles[0] == "摘要" and titles[-1] == "结论"
+    assert any("检索增强生成" in t for t in titles)
     assert all(len(s.points) >= 2 for s in result.sections)
 
 
@@ -568,11 +572,13 @@ def test_missing_persona_and_missing_human_do_not_crash():
     assert _last_human_text([SystemMessage(content="只有系统消息")]) == ""
 
 
-def test_sync_stream_yields_single_chunk():
+def test_sync_stream_yields_multiple_chunks():
+    """流式必须真的分片：一次性吐整段时，前端的进度条永远是「闪一下就完」。"""
     model = DemoChatModel()
     messages = [SystemMessage(content="你是一位资深的学术研究选题专家"), HumanMessage(content="研究领域：RAG")]
-    chunks = list(model.stream(messages))
-    assert "".join(c.content for c in chunks).strip()
+    chunks = [c.content for c in model.stream(messages)]
+    assert len(chunks) > 3
+    assert "".join(chunks).strip()
 
 
 @pytest.mark.asyncio
@@ -597,3 +603,131 @@ async def test_structured_output_reports_parsing_error_instead_of_raising():
     assert out["parsed"] is None
     assert out["parsing_error"] is not None
     assert '"title": "x"' in out["raw"].content
+
+
+# ---------------------------------------------------------------------------
+# 区分度：不同选题必须产出不同论文
+#
+# 这是演示可信度的底线。改造前实测过：两篇选题毫不相干的论文，
+# 正文逐字相同（都是固定 6 章 + 固定要点 + 按章节名取种子的句式），
+# 演示反而证明系统是假的。下面这几条就是那次事故的回归防线。
+# ---------------------------------------------------------------------------
+def _writer_prompt_for(title: str, section: dict, refs: int) -> str:
+    points = "\n".join(f"- {p}" for p in section["points"])
+    refs_text = "\n".join(f"[{i + 1}] 某文献{i + 1}[J]. 2020." for i in range(refs)) or "暂无参考文献"
+    return (
+        f"请撰写以下章节内容：\n\n## 论文题目：{title}\n\n## 章节标题：{section['title']}\n\n"
+        f"### 内容要点：\n{points}\n\n"
+        f"### 相关文献（本节可引用的全部文献，编号固定，不得改写）：\n{refs_text}\n\n"
+        f"### 历史评审改进建议：\n（首次撰写，暂无历史意见）\n\n"
+        f"### 要求：\n- 写作风格：formal\n- 预估字数：{section['word_count']} 字左右"
+    )
+
+
+def _full_paper(title: str, word_limit: int, refs: int):
+    outline = build_outline(f"标题：{title}\n论文类型：research\n总字数要求：约 {word_limit} 字")
+    parts = []
+    for section in outline["sections"]:
+        body = build_section(_writer_prompt_for(title, section, refs))
+        parts.append((section["title"], body))
+    text = "\n\n".join(f"## {h}\n\n{b}" for h, b in parts)
+    return outline, parts, text
+
+
+def _trigram_overlap(a: str, b: str, n: int = 3) -> float:
+    sa, sb = "".join(a.split()), "".join(b.split())
+    ga = {sa[i:i + n] for i in range(max(0, len(sa) - n + 1))}
+    gb = {sb[i:i + n] for i in range(max(0, len(sb) - n + 1))}
+    return len(ga & gb) / max(1, len(ga | gb))
+
+
+def test_different_titles_produce_different_papers():
+    """选题不同 → 正文必须有实质差异（3-gram 重合率 < 30%）。"""
+    _, _, cs = _full_paper("面向学术写作的检索增强生成质量门控研究", 6000, 5)
+    _, _, human = _full_paper("唐代边塞诗中的地理意象研究", 8000, 4)
+    _, _, med = _full_paper("社区高血压患者用药依从性干预研究", 5000, 6)
+
+    assert _trigram_overlap(cs, human) < 0.3
+    assert _trigram_overlap(cs, med) < 0.3
+    assert _trigram_overlap(human, med) < 0.3
+
+
+def test_same_title_is_still_deterministic():
+    """差异化的前提是确定性：同一题目重复生成必须逐字相同，否则 GIF 脚本对不上。"""
+    _, _, a = _full_paper("社区高血压患者用药依从性干预研究", 5000, 6)
+    _, _, b = _full_paper("社区高血压患者用药依从性干预研究", 5000, 6)
+    assert a == b
+
+
+def test_section_structure_follows_discipline():
+    """章节骨架必须随学科变：医学论文不该出现「相关工作」这种计算机章节。"""
+    cs = [s["title"] for s in build_outline("标题：检索增强生成质量门控研究\n论文类型：research")["sections"]]
+    human = [s["title"] for s in build_outline("标题：唐代边塞诗中的地理意象研究\n论文类型：research")["sections"]]
+    med = [s["title"] for s in build_outline("标题：社区高血压患者用药依从性干预研究\n论文类型：research")["sections"]]
+
+    assert "相关工作" in cs
+    assert any("概念界定" in t for t in human)
+    assert "资料与方法" in med and "结果" in med
+    assert cs != med and human != med
+
+
+def test_review_type_uses_review_plan():
+    plan = build_outline("标题：检索增强生成研究进展\n论文类型：review\n总字数要求：约 6000 字")
+    titles = [s["title"] for s in plan["sections"]]
+    assert any("检索策略" in t for t in titles)
+    assert any("展望" in t for t in titles)
+
+
+def test_outline_word_counts_sum_to_limit():
+    plan = build_outline("标题：某研究\n论文类型：research\n总字数要求：约 6000 字")
+    total = sum(s["word_count"] for s in plan["sections"])
+    assert 5000 <= total <= 6600
+
+
+def test_section_length_tracks_requested_word_count():
+    """同一章节要求 600 字与 1800 字，实际篇幅必须不同（否则「字数分配」是摆设）。"""
+    outline = build_outline("标题：社区高血压患者用药依从性干预研究\n总字数要求：约 6000 字")
+    short = dict(outline["sections"][1], word_count=600)
+    long = dict(outline["sections"][1], word_count=1800)
+    short_text = build_section(_writer_prompt_for("社区高血压患者用药依从性干预研究", short, 4))
+    long_text = build_section(_writer_prompt_for("社区高血压患者用药依从性干预研究", long, 4))
+    assert len(long_text) > len(short_text) * 1.5
+
+
+def test_section_has_no_duplicate_paragraphs():
+    """同一篇论文内不能出现整段重复：复制段落灌水是最容易被看穿的假。"""
+    _, parts, _ = _full_paper("唐代边塞诗中的地理意象研究", 8000, 4)
+    paragraphs = [p for _, body in parts for p in body.split("\n\n") if len(p) > 20]
+    duplicated = [p for p in set(paragraphs) if paragraphs.count(p) > 1]
+    assert duplicated == []
+
+
+def test_section_without_paper_title_falls_back_to_section_name():
+    """旧 Prompt（没有论文题目）必须仍能生成，不能因为改动而 500。"""
+    text = build_section(
+        "请撰写以下章节内容：\n\n## 章节标题：方法\n\n### 内容要点：\n- 整体框架设计\n\n"
+        "### 相关文献（本节可引用的全部文献，编号固定，不得改写）：\n暂无参考文献\n\n### 要求：\n- 预估字数：800 字左右"
+    )
+    assert len(text) > 200
+
+
+def test_review_score_reflects_content_length():
+    """分数是算出来的：同样题目下，长文的完整度必须高于短文。"""
+    long_body = "## 引言\n" + ("这是一段用于测试长短的正文内容，讨论检索增强生成的有效性。[1]\n\n" * 30)
+    short_body = "## 引言\n这是一段很短的正文。[1]"
+    long_review = ReviewResult.model_validate(
+        build_review(f"## 论文标题\n某研究\n\n## 正文内容\n{long_body}\n\n## 参考文献\n[1] A.")
+    )
+    short_review = ReviewResult.model_validate(
+        build_review(f"## 论文标题\n某研究\n\n## 正文内容\n{short_body}\n\n## 参考文献\n[1] A.")
+    )
+    assert long_review.score > short_review.score
+
+
+def test_review_flags_missing_citations_as_must_fix():
+    """全文零引用是阻断级问题，必须进 must_fix（否则重写循环永远不会触发）。"""
+    body = "## 引言\n" + ("没有引用的正文内容，讨论某个问题。\n\n" * 10)
+    review = ReviewResult.model_validate(
+        build_review(f"## 论文标题\n某研究\n\n## 正文内容\n{body}\n\n## 参考文献\n暂无参考文献")
+    )
+    assert review.must_fix
