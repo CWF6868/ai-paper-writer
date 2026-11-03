@@ -51,7 +51,14 @@ def get_embedding_model():
 
 
 def check_llm_config(require_embedding: bool = True):
-    """生成前校验 Key 是否已配置。require_embedding=False 时只校验 DeepSeek（如选题推荐）。"""
+    """生成前校验 Key 是否已配置。require_embedding=False 时只校验 DeepSeek（如选题推荐）。
+
+    演示模式直接放行：演示实例本来就没有（也不该有）真实 Key，
+    模型与向量化都在本地完成，这里再拦一次只会把 Demo 拦成 400。
+    """
+    if settings.DEMO_MODE:
+        return
+
     missing = []
     if not settings.DEEPSEEK_API_KEY:
         missing.append("DeepSeek 的 DEEPSEEK_API_KEY")

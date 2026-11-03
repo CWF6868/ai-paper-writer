@@ -8,6 +8,12 @@ from chromadb.config import Settings
 from app.config import settings
 from app.rag.embeddings import get_embeddings
 
+COLLECTION_NAME = "academic_references"
+# 演示模式单独一个集合：真实 embedding 是 1024 维，演示用本地 256 维哈希向量，
+# 混在同一个集合里 Chroma 会直接报维度不匹配；而且演示语料也不该污染正式库。
+DEMO_COLLECTION_NAME = "academic_references_demo"
+
+
 class VectorStore:
     """
     向量数据库管理类（单例：全局只会有一个实例）。
@@ -44,12 +50,28 @@ class VectorStore:
         self.embeddings = get_embeddings()
 
         # 创建或获取集合（相当于数据库里的一张“表”）
+        self.collection_name = DEMO_COLLECTION_NAME if settings.DEMO_MODE else COLLECTION_NAME
         self.collection = self.client.get_or_create_collection(
-            name="academic_references",
+            name=self.collection_name,
             metadata={"description": "学术论文参考文献向量库"},
         )
 
         self._initialized = True
+
+    def use_collection(self, name: str) -> None:
+        """切换集合。
+
+        演示初始化会调用它：vector_store 是模块级单例，创建时机可能早于
+        DEMO_MODE 生效（例如先被测试或真实 Key 初始化过），只在 __init__ 里
+        判断一次并不够。
+        """
+        if name == self.collection_name:
+            return
+        self.collection_name = name
+        self.collection = self.client.get_or_create_collection(
+            name=name,
+            metadata={"description": "学术论文参考文献向量库"},
+        )
 
     def add_documents(self, documents: List[Dict]) -> None:
         """
@@ -119,9 +141,9 @@ class VectorStore:
 
     def clear(self) -> None:
         """清空并重建集合"""
-        self.client.delete_collection("academic_references")
+        self.client.delete_collection(self.collection_name)
         self.collection = self.client.get_or_create_collection(
-            name="academic_references",
+            name=self.collection_name,
             metadata={"description": "学术论文参考文献向量库"},
         )
 

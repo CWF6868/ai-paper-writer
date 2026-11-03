@@ -1,16 +1,21 @@
 # main.py —— FastAPI 应用入口
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from sqlalchemy import text
 
+from app.config import settings
 from app.database import engine, Base
 # 导入模型，create_all 才能认出所有表
 import app.models.user, app.models.paper, app.models.chapter, app.models.reference
 import app.models.llm_call_log  # noqa: F401  P0-3 成本流水表
 from app.api import papers, auth, topics, export, metrics
 from app.core.llm_log_sink import usage_log_sink
+
+logger = logging.getLogger(__name__)
 
 async def _ensure_quality_columns(conn):
     """轻量迁移：给已存在的 papers 表补质量评审列（create_all 不改已有表结构）"""
@@ -57,6 +62,17 @@ async def lifespan(app: FastAPI):
     from app.rag.vector_store import vector_store  # noqa: F401  碰一下单例即完成初始化
     # 启动成本流水落库（绑定事件循环）。不启动的话，回调只能丢弃记录。
     usage_log_sink.start()
+
+    # 演示模式：首次启动准备语料 / 演示账号 / 一篇成稿。
+    # 失败不阻断启动：Demo 少一篇样例不等于服务不可用，日志留证据即可。
+    if settings.DEMO_MODE and settings.DEMO_SEED_ON_START:
+        from app.demo.seed import ensure_demo_data
+        try:
+            stats = await ensure_demo_data()
+            logger.info("演示数据就绪：%s", stats)
+        except Exception:  # noqa: BLE001
+            logger.exception("演示数据初始化失败（服务继续启动，Demo 可能不完整）")
+
     yield
     # 退出前把队列里还没落库的调用流水刷盘：异步落库是批量的，
     # 不在这里收尾，最后一批（最多 50 条）会随进程一起消失。

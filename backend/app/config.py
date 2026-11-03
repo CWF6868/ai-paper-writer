@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     # 可用 .env 的 QUALITY_PASS_THRESHOLD 覆盖。
     QUALITY_PASS_THRESHOLD: float = 0.44
 
+    # ---- 演示模式（公网 Demo）----
+    # 打开后：模型调用换成本地确定性实现，向量化换成哈希向量，不发起任何外部请求。
+    # 为什么需要它：公网 Demo 若挂真实 Key，会被刷成本；不挂 Key 则生成接口直接 400。
+    # 注意：这里只替换「模型输出」这一层，RAG/并发/质量门禁/SSE/导出仍走生产代码。
+    DEMO_MODE: bool = False
+    # 启动时自动准备演示数据（语料 + 演示账号 + 一篇成稿）。首次冷启动会多花几秒。
+    DEMO_SEED_ON_START: bool = True
+
     # ---- JWT ----
     SECRET_KEY: str = "dev-secret-change-me"
     ALGORITHM: str = "HS256"

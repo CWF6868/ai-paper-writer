@@ -54,6 +54,13 @@ _PRICE_RMB_PER_1M: Dict[str, Dict[str, Dict[str, float]]] = {
         "peak": {"cache_hit_input": 0.30, "cache_miss_input": 9.00, "output": 27.00},
         "off_peak": {"cache_hit_input": 0.15, "cache_miss_input": 4.50, "output": 13.50},
     },
+    # 演示模式的本地模型：不产生任何费用。
+    # 补一条 0 价而不是让它落到「未知模型」分支：未知模型会打告警，
+    # 而告警一旦成为常态，真正的缺价（影响成本故事）就会被淹掉。
+    "demo-mock": {
+        "peak": {"cache_hit_input": 0.0, "cache_miss_input": 0.0, "output": 0.0},
+        "off_peak": {"cache_hit_input": 0.0, "cache_miss_input": 0.0, "output": 0.0},
+    },
 }
 
 # 模型别名归一化。
@@ -457,14 +464,28 @@ def build_chat_model(
     streaming: bool = False,
     max_tokens: Optional[int] = None,
     callbacks: Optional[List[Any]] = None,
-) -> ChatOpenAI:
+) -> Any:
     """唯一的 ChatOpenAI 构造入口：超时 / 重试 / 计量回调在这里统一配置。
 
     重试说明：这里不再自己写退避循环。langchain-openai 的 max_retries 透传给
     OpenAI SDK，SDK 内部就是指数退避 + 抖动。若在外层再包 3 次，实际会放大成
     3×3=9 次请求 —— 限流时反而把配额打得更狠。
+
+    演示模式（DEMO_MODE）：返回 DemoChatModel —— 它同样是 BaseChatModel，
+    因此 bind_tools / with_structured_output / 流式与计量回调的行为完全一致，
+    上层 Agent 不需要任何改动。计量照常记录（token 数照估，单价查不到 → 成本记 ¥0）。
     """
     limit = max_tokens or settings.LLM_MAX_TOKENS
+
+    if settings.DEMO_MODE:
+        from app.demo.chat import DemoChatModel
+        return DemoChatModel(
+            temperature=temperature,
+            max_tokens=limit,
+            streaming=streaming,
+            callbacks=(callbacks if callbacks is not None else [CostTrackingCallback()]),
+        )
+
     return ChatOpenAI(
         model=model or settings.DEEPSEEK_MODEL,
         api_key=settings.DEEPSEEK_API_KEY,
@@ -485,7 +506,15 @@ def build_chat_model(
 
 
 def build_embedding_model():
-    """Embedding 模型的唯一构造入口（计量暂不覆盖：百炼按 token 计价口径不同）。"""
+    """Embedding 模型的唯一构造入口（计量暂不覆盖：百炼按 token 计价口径不同）。
+
+    演示模式返回本地哈希向量：不联网，但依然按字符重合度排序，
+    检索结果与查询主题相关（不是随机返回），RAG 链路可被真实演示。
+    """
+    if settings.DEMO_MODE:
+        from app.demo.chat import DemoHashEmbeddings
+        return DemoHashEmbeddings()
+
     from langchain_openai import OpenAIEmbeddings
     return OpenAIEmbeddings(
         model=settings.DASHSCOPE_MODEL,
