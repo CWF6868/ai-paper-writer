@@ -131,7 +131,9 @@ def test_ref_lines_empty():
 
 def test_find_cjk_font_returns_existing_path_or_none():
     font = _find_cjk_font()
-    assert font is None or font.endswith(".ttf")
+    # 现在候选里既有 Windows 的 .ttf，也有 Linux 的 .ttc / macOS 的 .ttc，
+    # 断言要兼容三种平台；None 表示当前环境确实没有可用中文字体。
+    assert font is None or font.endswith((".ttf", ".ttc"))
 
 
 # ---------- Word 文档冒烟 ----------

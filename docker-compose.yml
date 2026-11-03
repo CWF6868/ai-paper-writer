@@ -1,0 +1,66 @@
+# docker-compose.yml —— 一条命令拉起「前端 + 后端 + 持久化数据卷」
+#
+#   docker compose up -d --build      起服务（首次会构建镜像，约 3-5 分钟）
+#   docker compose logs -f backend    看后端日志
+#   docker compose down               停服务（数据保留在命名卷里）
+#   docker compose down -v            连数据一起删（演示环境重置用这个）
+#
+# 默认 DEMO_MODE=true：不调用任何外部模型，公网可直接跑，不产生费用。
+# 要用真实模型：DEMO_MODE=false DEEPSEEK_API_KEY=... DASHSCOPE_API_KEY=... docker compose up -d
+
+name: ai-paper-writer
+
+services:
+  backend:
+    build:
+      context: ./backend
+      args:
+        # 默认官方源（可复现）；国内构建建议：
+        #   APT_MIRROR=http://mirrors.aliyun.com PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple docker compose build
+        APT_MIRROR: "${APT_MIRROR:-}"
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-https://pypi.org/simple}"
+    image: ai-paper-writer-backend:local
+    environment:
+      # 演示模式：模型与向量化都在本地完成，零外呼、零成本
+      DEMO_MODE: "${DEMO_MODE:-true}"
+      DEMO_SEED_ON_START: "${DEMO_SEED_ON_START:-true}"
+      # 必须落在卷内：否则容器重建时 SQLite 与向量库一起消失
+      DATABASE_URL: "sqlite:////app/data/paper_writer.db"
+      VECTOR_DB_PATH: "/app/data/chroma"
+      # 生产务必覆盖；演示环境共用这个默认值不影响使用，但别拿它承载真实用户
+      SECRET_KEY: "${SECRET_KEY:-dev-secret-change-me}"
+      # 留空即走演示实现；填了才真正外呼
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      DASHSCOPE_API_KEY: "${DASHSCOPE_API_KEY:-}"
+    volumes:
+      - backend-data:/app/data
+    healthcheck:
+      # start_period 给足：冷启动要先建表、灌 42 篇语料、生成一篇样例论文
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=3).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmjs.org}"
+    image: ai-paper-writer-frontend:local
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      backend:
+        # 等后端健康再起 nginx：否则首屏请求 502，用户第一眼看到的是报错
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  backend-data:

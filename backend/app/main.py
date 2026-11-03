@@ -104,5 +104,20 @@ app.include_router(auth.router, prefix= "/api/auth" , tags=[ "认证" ]) # ← �
 
 @app.get("/")
 async def root():
-    """健康检查"""
+    """根路径：人工确认服务活着（浏览器直接打开就能看）"""
     return {"message": "AI 论文写作系统 API", "version": "1.0.0", "status": "running"}
+
+
+@app.get("/api/health")
+async def health():
+    """健康检查（给容器 / 反代 / 云平台用）。
+
+    为什么不复用 `GET /`：生产环境 nginx 会把 `/` 交给前端静态页，
+    探活打到的是 index.html 而不是后端 —— 后端挂了也返回 200，探活失去意义。
+    `/api/` 前缀在所有部署形态下都只会到后端，所以探活必须有独立路径。
+    """
+    return {
+        "status": "running",
+        "version": "1.0.0",
+        "demo_mode": settings.DEMO_MODE,
+    }

@@ -13,6 +13,18 @@ async def test_root_health_check(client):
     assert "message" in body
 
 
+async def test_api_health_check_reports_demo_mode(client):
+    """容器/反代探活走 /api/health：在 nginx 后面 `/` 是前端静态页，探它等于探 nginx。
+
+    顺带锁定 demo_mode 字段 —— 公网冒烟脚本靠它断言"演示实例不得真实调用模型"。
+    """
+    r = await client.get("/api/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "running"
+    assert "demo_mode" in body
+
+
 async def test_openapi_schema_exposes_all_routers(client):
     r = await client.get("/openapi.json")
     assert r.status_code == 200

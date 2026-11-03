@@ -39,13 +39,23 @@ def main() -> None:
 
     with httpx.Client(timeout=180, follow_redirects=True) as c:
         # 1) 健康检查
+        # 走 /api/health 而不是 /：在 nginx 后面 / 是前端静态页，后端挂了也 200，
+        # 探活就变成了"探 nginx"。老版本没有这个接口时回退到 /，保持向后兼容。
         try:
-            r = c.get(f"{base}/")
+            r = c.get(f"{base}/api/health")
+            if r.status_code == 404:
+                r = c.get(f"{base}/")
         except Exception as exc:  # noqa: BLE001
             _fail("健康检查", f"无法连接 {base}: {exc}")
         if r.status_code != 200:
             _fail("健康检查", f"HTTP {r.status_code}")
-        _ok("健康检查", r.json().get("status", ""))
+        try:
+            payload = r.json()
+        except Exception:  # noqa: BLE001
+            _fail("健康检查", "返回的不是 JSON（可能打到了前端静态页）")
+        _ok("健康检查", payload.get("status", ""))
+        if args.public and payload.get("demo_mode") is False:
+            _fail("演示模式", "公网实例应当以 DEMO_MODE=true 运行，否则会真实调用模型并产生费用")
 
         # 2) 登录（演示账号）
         r = c.post(f"{base}/api/auth/login", data={"username": args.email, "password": args.password})

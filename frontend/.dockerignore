@@ -1,0 +1,11 @@
+# frontend/.dockerignore —— 别把本机 node_modules 拷进构建上下文
+#
+# 不忽略的后果很隐蔽：Windows 的 node_modules 里是 .node 原生模块和
+# esbuild.exe，拷进 alpine 容器后 `npm ci` 看似成功，构建时才报平台不匹配。
+node_modules/
+dist/
+.npm/
+.env
+.env.*
+Dockerfile
+.dockerignore

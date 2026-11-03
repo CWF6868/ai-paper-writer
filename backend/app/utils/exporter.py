@@ -6,11 +6,24 @@ from io import BytesIO
 
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 
-# Windows 常见中文字体，按优先级取第一个存在的（都是单体 .ttf，fpdf2 能稳定解析）
+# 中文字体候选：按优先级取第一个存在的。
+# Windows 用系统自带的单体 ttf；Linux 容器用 wqy（Debian 的 fonts-wqy-* 包，
+# .ttc 集合字体 fpdf2 也能解析，取第一个 face）。顺序上先 Windows 后 Linux，
+# 这样本机开发仍然命中 simhei，容器里自然落到 wqy。
+# 注意：路径写死过一次的教训 —— 只列 Windows 路径，容器里 PDF 必然报
+# 「未找到可用的中文字体」，而 docx 照常能导出，很容易被误判成"容器没问题"。
 _CJK_FONT_CANDIDATES = [
+    os.environ.get("PDF_CJK_FONT", ""),        # 显式指定优先（自定义镜像 / 其他发行版）
     r"C:\Windows\Fonts\simhei.ttf",
     r"C:\Windows\Fonts\simfang.ttf",
     r"C:\Windows\Fonts\simkai.ttf",
+    r"C:\Windows\Fonts\msyh.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/arphic/uming.ttc",
+    "/System/Library/Fonts/PingFang.ttc",
 ]
 
 

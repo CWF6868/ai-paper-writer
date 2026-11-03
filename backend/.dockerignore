@@ -1,0 +1,31 @@
+# backend/.dockerignore —— 构建上下文里不该出现的东西
+#
+# 关键三条：
+#   .env  —— 真实 Key 绝不能进镜像层（进了层就算删了也能被 history 扒出来）
+#   data  —— 本机向量库/数据库几十 MB，且和容器里的卷冲突
+#   venv  —— Windows 的虚拟环境拷进 Linux 镜像里毫无用处，还会让 import 拿到错的东西
+.env
+.env.*
+!.env.example
+
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+tests/
+docs/
+Dockerfile
+.dockerignore
