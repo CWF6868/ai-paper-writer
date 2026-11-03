@@ -5,8 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
+import asyncio
 import json
 
+from app.config import settings
 from app.database import get_db, AsyncSessionLocal
 from app.models.paper import Paper, PaperStatus
 from app.models.chapter import Chapter
@@ -262,11 +264,17 @@ async def stream_generate_paper(
 
     async def event_generator():
         final_state = dict(initial_state)
+        # 演示节奏：只在 DEMO_MODE 且显式设置了 DEMO_PACE_MS 时生效。
+        # 演示模式没有推理耗时，四个阶段会在 0.1 秒内推完，进度条一闪而过；
+        # 这不是伪造「模型思考」，而是把已有的阶段事件拉开到肉眼可读。
+        pace = (max(0, int(settings.DEMO_PACE_MS or 0)) / 1000.0) if settings.DEMO_MODE else 0.0
         try:
             async for event in paper_workflow.stream(initial_state):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
                 for update in event.values():
                     final_state.update(update)
+                if pace:
+                    await asyncio.sleep(pace)
 
             async with AsyncSessionLocal() as session:
                 paper_obj = (await session.execute(

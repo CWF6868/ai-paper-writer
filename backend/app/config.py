@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     DEMO_MODE: bool = False
     # 启动时自动准备演示数据（语料 + 演示账号 + 一篇成稿）。首次冷启动会多花几秒。
     DEMO_SEED_ON_START: bool = True
+    # 演示节奏（毫秒）：SSE 进度事件之间的最小间隔。
+    # 默认 0 = 不干预。演示模式本身没有推理耗时，四个阶段会在 0.1 秒内全部推完，
+    # 进度条一闪而过、看起来像假动作；录 GIF 时设 600-900 能让过程可读。
+    # 只在 DEMO_MODE 下生效，真实模式不受影响。
+    DEMO_PACE_MS: int = 0
 
     # ---- JWT ----
     SECRET_KEY: str = "dev-secret-change-me"

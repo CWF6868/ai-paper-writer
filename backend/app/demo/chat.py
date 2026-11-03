@@ -6,7 +6,8 @@
 # with_structured_output（function_calling / json_mode / raw_parse 三级）全部照常工作，
 # 上层一行代码都不用改 —— 只是在 build_chat_model 的分支里换了实现。
 import json
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+import time
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.embeddings import Embeddings
@@ -15,6 +16,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from langchain_core.runnables import RunnableLambda
 
+from app.config import settings
 from app.demo.content import (
     build_citation_verdict,
     build_generic,
@@ -127,6 +129,28 @@ def reply_text(messages: Sequence[BaseMessage]) -> str:
     return build_generic(prompt)
 
 
+_STREAM_BREAKS = "。！？；，\n"
+
+
+def iter_stream_chunks(text: str, size: int = 26) -> Iterator[str]:
+    """把整段文本切成小片，让 SSE 真的逐段推进（而不是一次性刷完）。
+
+    按标点断片，避免把「检索增强」这类词切成两半；
+    连续无标点的长串超过 2 倍片长时强制切断，防止出现超大分片。
+    """
+    buf = ""
+    for ch in text or "":
+        buf += ch
+        if len(buf) >= size and ch in _STREAM_BREAKS:
+            yield buf
+            buf = ""
+        elif len(buf) >= size * 2:
+            yield buf
+            buf = ""
+    if buf:
+        yield buf
+
+
 def _schema_payload(schema: Any, messages: Sequence[BaseMessage]) -> Dict[str, Any]:
     """结构化输出：按 Schema 类型生成对应载荷（仍然只换模型，不换校验）。"""
     name = getattr(schema, "__name__", "")
@@ -199,9 +223,13 @@ class DemoChatModel(BaseChatModel):
         **kwargs: Any,
     ):
         text = reply_text(messages)
-        if run_manager:
-            run_manager.on_llm_new_token(text)
-        yield ChatGenerationChunk(message=AIMessageChunk(content=text))
+        delay = max(0, int(settings.DEMO_PACE_MS or 0)) / 1000.0 / 4
+        for chunk in iter_stream_chunks(text):
+            if run_manager:
+                run_manager.on_llm_new_token(chunk)
+            yield ChatGenerationChunk(message=AIMessageChunk(content=chunk))
+            if delay:
+                time.sleep(delay)
 
     def with_structured_output(
         self,
